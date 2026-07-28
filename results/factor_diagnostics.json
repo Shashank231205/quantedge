@@ -1,0 +1,242 @@
+{
+  "ic_decay": {
+    "momentum": [
+      {
+        "factor": "momentum",
+        "horizon_days": 1,
+        "mean_ic": 0.02415,
+        "std_ic": 0.23348,
+        "ic_ir": 0.1034,
+        "hit_rate": 0.5671,
+        "t_stat": 3.66,
+        "p_value": 0.00026,
+        "n_periods": 1252
+      },
+      {
+        "factor": "momentum",
+        "horizon_days": 5,
+        "mean_ic": 0.02755,
+        "std_ic": 0.21558,
+        "ic_ir": 0.1278,
+        "hit_rate": 0.5633,
+        "t_stat": 4.514,
+        "p_value": 1e-05,
+        "n_periods": 1248
+      },
+      {
+        "factor": "momentum",
+        "horizon_days": 10,
+        "mean_ic": 0.02943,
+        "std_ic": 0.19793,
+        "ic_ir": 0.1487,
+        "hit_rate": 0.5664,
+        "t_stat": 5.242,
+        "p_value": 0.0,
+        "n_periods": 1243
+      },
+      {
+        "factor": "momentum",
+        "horizon_days": 21,
+        "mean_ic": 0.03675,
+        "std_ic": 0.18446,
+        "ic_ir": 0.1992,
+        "hit_rate": 0.6209,
+        "t_stat": 6.993,
+        "p_value": 0.0,
+        "n_periods": 1232
+      },
+      {
+        "factor": "momentum",
+        "horizon_days": 42,
+        "mean_ic": 0.05462,
+        "std_ic": 0.17227,
+        "ic_ir": 0.317,
+        "hit_rate": 0.6491,
+        "t_stat": 11.033,
+        "p_value": 0.0,
+        "n_periods": 1211
+      },
+      {
+        "factor": "momentum",
+        "horizon_days": 63,
+        "mean_ic": 0.06329,
+        "std_ic": 0.15402,
+        "ic_ir": 0.4109,
+        "hit_rate": 0.6697,
+        "t_stat": 14.176,
+        "p_value": 0.0,
+        "n_periods": 1190
+      }
+    ],
+    "mean_reversion": [
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 1,
+        "mean_ic": 0.00267,
+        "std_ic": 0.19018,
+        "ic_ir": 0.014,
+        "hit_rate": 0.4936,
+        "t_stat": 0.543,
+        "p_value": 0.58739,
+        "n_periods": 1495
+      },
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 5,
+        "mean_ic": 0.00456,
+        "std_ic": 0.16346,
+        "ic_ir": 0.0279,
+        "hit_rate": 0.4762,
+        "t_stat": 1.078,
+        "p_value": 0.2813,
+        "n_periods": 1491
+      },
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 10,
+        "mean_ic": 0.00136,
+        "std_ic": 0.15767,
+        "ic_ir": 0.0086,
+        "hit_rate": 0.4684,
+        "t_stat": 0.333,
+        "p_value": 0.73955,
+        "n_periods": 1486
+      },
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 21,
+        "mean_ic": -0.00292,
+        "std_ic": 0.14668,
+        "ic_ir": -0.0199,
+        "hit_rate": 0.4793,
+        "t_stat": -0.765,
+        "p_value": 0.44452,
+        "n_periods": 1475
+      },
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 42,
+        "mean_ic": 0.00741,
+        "std_ic": 0.14546,
+        "ic_ir": 0.051,
+        "hit_rate": 0.5172,
+        "t_stat": 1.944,
+        "p_value": 0.05215,
+        "n_periods": 1454
+      },
+      {
+        "factor": "mean_reversion",
+        "horizon_days": 63,
+        "mean_ic": 0.01167,
+        "std_ic": 0.14256,
+        "ic_ir": 0.0818,
+        "hit_rate": 0.5164,
+        "t_stat": 3.098,
+        "p_value": 0.00199,
+        "n_periods": 1433
+      }
+    ],
+    "volatility": [
+      {
+        "factor": "volatility",
+        "horizon_days": 1,
+        "mean_ic": -0.00179,
+        "std_ic": 0.27407,
+        "ic_ir": -0.0065,
+        "hit_rate": 0.4932,
+        "t_stat": -0.251,
+        "p_value": 0.8018,
+        "n_periods": 1474
+      },
+      {
+        "factor": "volatility",
+        "horizon_days": 5,
+        "mean_ic": -0.01389,
+        "std_ic": 0.26497,
+        "ic_ir": -0.0524,
+        "hit_rate": 0.4728,
+        "t_stat": -2.01,
+        "p_value": 0.04461,
+        "n_periods": 1470
+      },
+      {
+        "factor": "volatility",
+        "horizon_days": 10,
+        "mean_ic": -0.01945,
+        "std_ic": 0.25514,
+        "ic_ir": -0.0762,
+        "hit_rate": 0.4969,
+        "t_stat": -2.917,
+        "p_value": 0.00359,
+        "n_periods": 1465
+      },
+      {
+        "factor": "volatility",
+        "horizon_days": 21,
+        "mean_ic": -0.02703,
+        "std_ic": 0.242,
+        "ic_ir": -0.1117,
+        "hit_rate": 0.4766,
+        "t_stat": -4.258,
+        "p_value": 2e-05,
+        "n_periods": 1454
+      },
+      {
+        "factor": "volatility",
+        "horizon_days": 42,
+        "mean_ic": -0.04229,
+        "std_ic": 0.24735,
+        "ic_ir": -0.171,
+        "hit_rate": 0.4445,
+        "t_stat": -6.472,
+        "p_value": 0.0,
+        "n_periods": 1433
+      },
+      {
+        "factor": "volatility",
+        "horizon_days": 63,
+        "mean_ic": -0.04659,
+        "std_ic": 0.23938,
+        "ic_ir": -0.1946,
+        "hit_rate": 0.4618,
+        "t_stat": -7.313,
+        "p_value": 0.0,
+        "n_periods": 1412
+      }
+    ]
+  },
+  "autocorrelation": {
+    "momentum": {
+      "lag_1d": 0.9942,
+      "lag_5d": 0.973,
+      "lag_21d": 0.8975
+    },
+    "mean_reversion": {
+      "lag_1d": 0.8553,
+      "lag_5d": 0.4668,
+      "lag_21d": 0.0038
+    },
+    "volatility": {
+      "lag_1d": 0.9955,
+      "lag_5d": 0.9779,
+      "lag_21d": 0.9146
+    }
+  },
+  "cross_factor_correlation": {
+    "mean_reversion": {
+      "mean_reversion": 1.0,
+      "momentum": -0.0389,
+      "volatility": -0.0387
+    },
+    "momentum": {
+      "mean_reversion": -0.0389,
+      "momentum": 1.0,
+      "volatility": 0.1299
+    },
+    "volatility": {
+      "mean_reversion": -0.0387,
+      "momentum": 0.1299,
+      "volatility": 1.0
+    }
+  }
+}
