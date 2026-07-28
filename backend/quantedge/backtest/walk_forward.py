@@ -20,7 +20,6 @@ The OOS numbers this produces are the ones that get reported.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
 
 import numpy as np
 import pandas as pd

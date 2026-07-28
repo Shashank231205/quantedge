@@ -14,8 +14,6 @@ from quantedge.factors.composite import CORE_FACTORS, CompositeFactor, get_facto
 from quantedge.factors.diagnostics import (
     cross_factor_correlation,
     ic_decay,
-    information_coefficient,
-    summarize_ic,
 )
 from quantedge.logging_config import get_recent_logs
 from quantedge.strategy import FACTOR_WEIGHTS, load_panel
@@ -203,7 +201,7 @@ def ticker_detail(ticker: str, lookback: int = Query(default=252, le=1500)) -> d
         else round(float(blended.iloc[-1][ticker]), 4),
         "price_history": [
             {"date": d, "close": round(float(p), 4)}
-            for d, p in zip(dates, prices)
+            for d, p in zip(dates, prices, strict=False)
             if pd.notna(p)
         ],
         "factor_history": history,

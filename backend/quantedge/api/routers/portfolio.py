@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
@@ -137,8 +136,9 @@ def live_signals(top_n: int = Query(default=20, le=100)) -> dict:
     }
 
     with session_scope() as s:
-        from quantedge.db.models import OhlcvClean
         from sqlalchemy import func
+
+        from quantedge.db.models import OhlcvClean
 
         payload["as_of"] = str(s.scalar(select(func.max(OhlcvClean.date))))
 

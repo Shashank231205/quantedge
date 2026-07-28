@@ -1,29 +1,78 @@
 {
-  "n_bars": 1506,
-  "n_tickers": 567,
-  "n_cells": 853902,
-  "naive_seconds": 5.951230833000409,
-  "vectorized_seconds": 0.3334977089998574,
-  "speedup": 17.84489270060609,
-  "reduction_pct": 94.39615571369596,
-  "results_match": true,
-  "max_abs_difference": 1.734723475976807e-17,
-  "n_repeats": 3,
-  "naive_times": [
-    5.972177542000281,
-    5.951230833000409,
-    5.971714625000459
-  ],
-  "vectorized_times": [
-    0.33574433400008274,
-    0.3334977089998574,
-    0.34593608300019696
-  ],
-  "environment": {
-    "python": "3.11.15",
-    "platform": "macOS-26.5.2-arm64-arm-64bit",
-    "processor": "arm",
-    "numpy": "2.4.6",
-    "pandas": "3.0.5"
-  }
+  "headline": {
+    "n_bars": 1506,
+    "n_tickers": 566,
+    "n_cells": 852396,
+    "naive_seconds": 2.584869374999471,
+    "vectorized_seconds": 0.052589750001061475,
+    "speedup": 49.151581343271225,
+    "reduction_pct": 97.96547746243183,
+    "results_match": true,
+    "max_abs_difference": 2.0816681711721685e-17,
+    "n_repeats": 3,
+    "naive_times": [
+      2.594779582999763,
+      2.584869374999471,
+      2.5913870419990417
+    ],
+    "vectorized_times": [
+      0.05287350000071456,
+      0.05312983400108351,
+      0.052589750001061475
+    ],
+    "environment": {
+      "python": "3.11.15",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "processor": "arm",
+      "numpy": "2.4.6",
+      "pandas": "3.0.5"
+    }
+  },
+  "scaling": [
+    {
+      "n_tickers": 50,
+      "n_bars": 1506,
+      "naive_seconds": 0.335,
+      "vectorized_seconds": 0.0558,
+      "speedup": 6.0,
+      "reduction_pct": 83.33,
+      "results_match": true
+    },
+    {
+      "n_tickers": 100,
+      "n_bars": 1506,
+      "naive_seconds": 0.5368,
+      "vectorized_seconds": 0.057,
+      "speedup": 9.4,
+      "reduction_pct": 89.38,
+      "results_match": true
+    },
+    {
+      "n_tickers": 250,
+      "n_bars": 1506,
+      "naive_seconds": 1.2367,
+      "vectorized_seconds": 0.0603,
+      "speedup": 20.5,
+      "reduction_pct": 95.13,
+      "results_match": true
+    },
+    {
+      "n_tickers": 500,
+      "n_bars": 1506,
+      "naive_seconds": 2.3296,
+      "vectorized_seconds": 0.0514,
+      "speedup": 45.3,
+      "reduction_pct": 97.79,
+      "results_match": true
+    },
+    {
+      "n_tickers": 566,
+      "n_bars": 1506,
+      "naive_seconds": 2.5894,
+      "vectorized_seconds": 0.0521,
+      "speedup": 49.7,
+      "reduction_pct": 97.99,
+      "results_match": true
+    }
+  ]
 }

@@ -83,7 +83,6 @@ class VectorizedBacktestEngine:
 
         # --- target weights on rebalance dates ----------------------------
         rebal_index = rebalance_dates(dates, self.config.rebalance_frequency)
-        rebal_set = set(rebal_index)
         date_pos = {dt: i for i, dt in enumerate(dates)}
 
         target_matrix = np.zeros((n_dates, n_tickers))
@@ -131,14 +130,11 @@ class VectorizedBacktestEngine:
             # t. Loop over rebalance dates only, vectorizing each segment.
             current = np.zeros(n_tickers)
             realized: list[float] = []
-            rebal_rows_sorted = sorted(rebal_rows)
-            next_rebal = {r: True for r in rebal_rows_sorted}
+            next_rebal = set(rebal_rows)
 
             for i in range(n_dates):
-                if i > 0:
-                    gross_r = float(current @ returns_matrix[i])
-                else:
-                    gross_r = 0.0
+                # Bar 0 has no prior weights, so it earns nothing.
+                gross_r = float(current @ returns_matrix[i]) if i > 0 else 0.0
 
                 cost = 0.0
                 turnover = 0.0

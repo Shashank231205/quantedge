@@ -18,7 +18,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-import numpy as np
 import pandas as pd
 
 from quantedge.backtest.costs import DEFAULT_COST_MODEL, CostModel

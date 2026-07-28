@@ -7,6 +7,7 @@ application — there is no synthetic log generator anywhere in the project.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections import deque
 from datetime import UTC, datetime
@@ -21,7 +22,8 @@ class RingBufferHandler(logging.Handler):
     """Keeps the most recent records in memory for the /system/logs endpoint."""
 
     def emit(self, record: logging.LogRecord) -> None:
-        try:
+        # Logging must never raise into the caller's control flow.
+        with contextlib.suppress(Exception):
             _LOG_BUFFER.append(
                 {
                     "timestamp": datetime.fromtimestamp(
@@ -32,8 +34,6 @@ class RingBufferHandler(logging.Handler):
                     "message": record.getMessage(),
                 }
             )
-        except Exception:  # never let logging break the caller
-            pass
 
 
 def get_recent_logs(

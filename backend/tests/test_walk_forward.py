@@ -61,7 +61,7 @@ class TestFoldGeneration:
     def test_test_windows_do_not_overlap(self, dates):
         """Each OOS bar must be counted exactly once."""
         folds = generate_folds(dates, WalkForwardConfig())
-        for a, b in zip(folds, folds[1:]):
+        for a, b in zip(folds, folds[1:], strict=False):
             assert a.test_end <= b.test_start
 
     def test_rolling_window_has_constant_train_length(self, dates):

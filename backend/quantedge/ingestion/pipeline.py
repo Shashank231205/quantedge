@@ -19,8 +19,8 @@ from quantedge.ingestion.base import DataSource
 from quantedge.ingestion.cleaning import clean_ohlcv
 from quantedge.ingestion.telemetry import track_job
 from quantedge.ingestion.universe import build_universe, members_as_of
-from quantedge.logging_config import get_logger
 from quantedge.ingestion.yfinance_source import YFinanceSource
+from quantedge.logging_config import get_logger
 
 log = get_logger(__name__)
 

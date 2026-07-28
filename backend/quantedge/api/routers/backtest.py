@@ -225,7 +225,6 @@ def trigger_run(request: RunRequest) -> dict:
     from quantedge.backtest.persistence import save_backtest_run
     from quantedge.metrics.report import compare_is_oos, full_report
     from quantedge.strategy import (
-        ORIENTATION_GRID,
         StrategySpec,
         run_full_sample,
         run_walk_forward,

@@ -9,14 +9,14 @@ from sqlalchemy import select
 from quantedge.api.deps import cache, require_api_key
 from quantedge.backtest.persistence import latest_run
 from quantedge.config import settings
-from quantedge.db.models import BacktestRun, PortfolioSnapshot, RiskEvent, Security
+from quantedge.db.models import PortfolioSnapshot, RiskEvent, Security
 from quantedge.db.session import session_scope
 from quantedge.logging_config import get_recent_logs
 from quantedge.risk.drawdown_guard import circuit_breaker_status
 from quantedge.risk.exposure import check_breaches, exposure_summary, sector_exposure
 from quantedge.risk.position_sizing import position_sizing_report, realized_volatility
 from quantedge.risk.var import var_report
-from quantedge.strategy import DEFAULT_SPEC, load_panel, run_full_sample
+from quantedge.strategy import DEFAULT_SPEC, run_full_sample
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 
