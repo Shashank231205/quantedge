@@ -43,6 +43,21 @@ def _signals() -> tuple[pd.DataFrame, dict[str, pd.DataFrame], pd.DataFrame]:
     return payload
 
 
+def warm_cache() -> None:
+    """Compute factor signals ahead of the first request.
+
+    Building the panel and every factor takes several seconds; doing it lazily
+    made the first Factor Explorer request an outlier that dominated the p95.
+    """
+    try:
+        _signals()
+        _sector_map()
+    except Exception as exc:  # a cold cache must not stop the API booting
+        from quantedge.logging_config import get_logger
+
+        get_logger(__name__).warning("factors.warm_cache_failed error=%s", exc)
+
+
 def _sector_map() -> dict[str, str]:
     cached = cache.get("sector_map")
     if cached is None:

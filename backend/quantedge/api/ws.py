@@ -13,6 +13,7 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 from quantedge.logging_config import get_logger
 
@@ -44,6 +45,11 @@ class ConnectionManager:
         )
         dead: list[WebSocket] = []
         for ws in list(self.active):
+            # Skip sockets the client has already closed; sending to one
+            # raises inside the ASGI layer rather than returning an error.
+            if ws.client_state != WebSocketState.CONNECTED:
+                dead.append(ws)
+                continue
             try:
                 await ws.send_text(payload)
             except Exception:
@@ -80,6 +86,9 @@ async def events(websocket: WebSocket) -> None:
             # Health panels update without the client polling.
             await asyncio.sleep(15)
 
+            if websocket.client_state != WebSocketState.CONNECTED:
+                break
+
             from quantedge.api.middleware import latency_stats
             from quantedge.ingestion.telemetry import compute_uptime
 
@@ -99,5 +108,8 @@ async def events(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
     except Exception as exc:
-        log.warning("ws.error %s", exc)
+        # A client that vanishes mid-send surfaces as a generic exception; the
+        # socket is already closed by then, so attempting further I/O raises
+        # "Unexpected ASGI message 'websocket.send'". Just drop the client.
+        log.debug("ws.closed %s", exc)
         await manager.disconnect(websocket)

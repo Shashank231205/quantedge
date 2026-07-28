@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/vite-env.d.ts","./src/components/primitives.tsx","./src/hooks/useapi.ts","./src/layout/shell.tsx","./src/lib/api.ts","./src/lib/format.ts","./src/screens/backtest.tsx","./src/screens/dashboard.tsx","./src/screens/factors.tsx","./src/screens/pipeline.tsx","./src/screens/risk.tsx"],"version":"5.9.3"}

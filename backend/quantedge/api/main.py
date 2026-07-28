@@ -21,7 +21,25 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("api.startup source=%s prefix=%s", settings.data_source, settings.api_prefix)
+
+    # Building the price panel, factor signals and live portfolio takes several
+    # seconds. Doing it on first request made that request a ~15s outlier that
+    # dominated the p95 the System Health screen reports. Warm it in a worker
+    # thread so startup stays non-blocking.
+    import asyncio
+
+    async def warm() -> None:
+        await asyncio.gather(
+            asyncio.to_thread(factors.warm_cache),
+            asyncio.to_thread(risk.warm_cache),
+        )
+        log.info("api.cache_warm")
+
+    task = asyncio.create_task(warm())
+
     yield
+
+    task.cancel()
     flush_on_shutdown()
     log.info("api.shutdown")
 

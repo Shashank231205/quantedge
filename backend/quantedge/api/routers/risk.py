@@ -24,8 +24,10 @@ router = APIRouter(prefix="/risk", tags=["risk"])
 def _live_portfolio():
     """Current weights, volatilities and return series.
 
-    Uses a full-sample run because the question here is "what does the book
-    look like today", not "how did the strategy validate".
+    Recomputing a full-sample backtest per request cost ~15s and pushed the
+    p95 far past the 200ms target, so the portfolio is built once at first use
+    and cached. ``warm_cache()`` primes it during API startup so even the first
+    caller sees a fast response.
     """
     cached = cache.get("live_portfolio")
     if cached is not None:
@@ -38,6 +40,17 @@ def _live_portfolio():
     payload = (result, panel, weights, vols, benchmark)
     cache.set("live_portfolio", payload)
     return payload
+
+
+def warm_cache() -> None:
+    """Build the live portfolio ahead of the first request."""
+    try:
+        _live_portfolio()
+        _sectors()
+    except Exception as exc:  # a cold cache must not stop the API booting
+        from quantedge.logging_config import get_logger
+
+        get_logger(__name__).warning("risk.warm_cache_failed error=%s", exc)
 
 
 def _sectors() -> pd.Series:

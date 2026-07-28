@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-base text-ink font-sans antialiased;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Thin terminal-style scrollbars so dense tables keep their density. */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-base-deep;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-edge;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-edge-light;
+  }
+
+  select option {
+    @apply bg-base-panel text-ink;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}

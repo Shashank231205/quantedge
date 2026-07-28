@@ -174,8 +174,11 @@ def trades(
             count_stmt = count_stmt.where(Trade.ticker.ilike(f"%{ticker.upper()}%"))
 
         total = s.scalar(count_stmt) or 0
+        # Closed trades first: the 29 still-open positions all share the last
+        # bar's date and carry no realised P&L, so leading with them makes the
+        # log look empty.
         rows = s.scalars(
-            base.order_by(Trade.entry_date.desc())
+            base.order_by(Trade.exit_date.desc().nullslast(), Trade.entry_date.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()
@@ -264,6 +267,12 @@ def trigger_run(request: RunRequest) -> dict:
         metrics = dict(report["out_of_sample"])
         metrics["comparison"] = report["comparison"]
         metrics["in_sample"] = report["in_sample"]
+        # The stitched OOS series has its own turnover; compute_is_oos does not
+        # see it, so attach it explicitly.
+        if not wf.oos_turnover.empty:
+            from quantedge.metrics.trades import turnover_statistics
+
+            metrics["turnover"] = turnover_statistics(wf.oos_turnover)
         run_id = save_backtest_run(
             f"{spec.name} (walk-forward OOS)", result, metrics,
             prices=panel, walk_forward=wf, is_walk_forward=True,
