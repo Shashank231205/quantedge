@@ -1,0 +1,476 @@
+{
+  "summary": {
+    "n_folds": 8,
+    "oos_days": 929,
+    "oos_sharpe": 1.1775,
+    "oos_max_drawdown": -0.1471,
+    "is_sharpe": 0.8627,
+    "n_configurations_tested": 16
+  },
+  "folds": [
+    {
+      "fold": 0,
+      "train_start": "2020-07-28",
+      "train_end": "2022-07-28",
+      "test_start": "2022-08-11",
+      "test_end": "2023-02-10",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": -0.1864,
+      "oos_sharpe": 0.0703,
+      "oos_return": 0.008422,
+      "oos_max_drawdown": -0.139173,
+      "oos_volatility": 0.179053
+    },
+    {
+      "fold": 1,
+      "train_start": "2021-02-10",
+      "train_end": "2023-02-10",
+      "test_start": "2023-02-27",
+      "test_end": "2023-08-28",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 0.349,
+      "oos_sharpe": 0.3262,
+      "oos_return": 0.031551,
+      "oos_max_drawdown": -0.100121,
+      "oos_volatility": 0.173852
+    },
+    {
+      "fold": 2,
+      "train_start": "2021-08-25",
+      "train_end": "2023-08-28",
+      "test_start": "2023-09-12",
+      "test_end": "2024-03-13",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 0.2057,
+      "oos_sharpe": 3.1714,
+      "oos_return": 0.307285,
+      "oos_max_drawdown": -0.083382,
+      "oos_volatility": 0.165811
+    },
+    {
+      "fold": 3,
+      "train_start": "2022-03-10",
+      "train_end": "2024-03-13",
+      "test_start": "2024-03-27",
+      "test_end": "2024-09-26",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 1.2378,
+      "oos_sharpe": 0.8149,
+      "oos_return": 0.089813,
+      "oos_max_drawdown": -0.106093,
+      "oos_volatility": 0.21246
+    },
+    {
+      "fold": 4,
+      "train_start": "2022-09-23",
+      "train_end": "2024-09-26",
+      "test_start": "2024-10-10",
+      "test_end": "2025-04-14",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": 1
+        }
+      },
+      "train_score": 1.4638,
+      "oos_sharpe": -0.3796,
+      "oos_return": -0.025474,
+      "oos_max_drawdown": -0.119688,
+      "oos_volatility": 0.155768
+    },
+    {
+      "fold": 5,
+      "train_start": "2023-04-11",
+      "train_end": "2025-04-14",
+      "test_start": "2025-04-29",
+      "test_end": "2025-10-28",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 0.4215,
+      "oos_sharpe": 3.9369,
+      "oos_return": 0.377801,
+      "oos_max_drawdown": -0.037545,
+      "oos_volatility": 0.159868
+    },
+    {
+      "fold": 6,
+      "train_start": "2023-10-24",
+      "train_end": "2025-10-28",
+      "test_start": "2025-11-11",
+      "test_end": "2026-05-14",
+      "train_days": 505,
+      "test_days": 127,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 0.8116,
+      "oos_sharpe": 2.7786,
+      "oos_return": 0.315334,
+      "oos_max_drawdown": -0.083737,
+      "oos_volatility": 0.195576
+    },
+    {
+      "fold": 7,
+      "train_start": "2024-05-09",
+      "train_end": "2026-05-14",
+      "test_start": "2026-05-29",
+      "test_end": "2026-07-27",
+      "train_days": 505,
+      "test_days": 40,
+      "selected_params": {
+        "weights": {
+          "momentum_risk_adj": 0.5,
+          "volatility": 0.3,
+          "mean_reversion": 0.2
+        },
+        "orient": {
+          "volatility": -1
+        }
+      },
+      "train_score": 1.7753,
+      "oos_sharpe": -0.869,
+      "oos_return": -0.081494,
+      "oos_max_drawdown": -0.147106,
+      "oos_volatility": 0.4984
+    }
+  ],
+  "report": {
+    "in_sample": {
+      "label": "in_sample",
+      "n_observations": 1457,
+      "start_date": "2020-07-28",
+      "end_date": "2026-05-14",
+      "years": 5.78,
+      "returns": {
+        "total_return": 0.59363,
+        "cagr": 0.083938,
+        "annualized_return": 0.083301,
+        "best_day": 0.037606,
+        "worst_day": -0.035272,
+        "hit_rate_daily": 0.1002
+      },
+      "risk_adjusted": {
+        "sharpe_ratio": 0.8627,
+        "sortino_ratio": 1.2904,
+        "calmar_ratio": 1.2597,
+        "omega_ratio": 1.597
+      },
+      "risk": {
+        "annualized_volatility": 0.073375,
+        "downside_deviation": 0.128463,
+        "max_drawdown": -0.066636,
+        "avg_drawdown": -0.013932,
+        "max_drawdown_duration_days": 28,
+        "time_underwater_pct": 11.67,
+        "ulcer_index": 0.006473,
+        "skewness": 0.3611,
+        "excess_kurtosis": 20.2949
+      },
+      "var": {
+        "portfolio_value": 1000000.0,
+        "var_95": {
+          "historical_pct": -0.002436,
+          "parametric_pct": -0.007272,
+          "cornish_fisher_pct": -0.004893,
+          "cvar_pct": -0.010791,
+          "historical_usd": 2435.84,
+          "cvar_usd": 10791.22
+        },
+        "var_99": {
+          "historical_pct": -0.017772,
+          "parametric_pct": -0.010422,
+          "cornish_fisher_pct": -0.030899,
+          "cvar_pct": -0.023599,
+          "historical_usd": 17772.02,
+          "cvar_usd": 23599.08
+        }
+      },
+      "attribution": {
+        "systematic_pct": 5.08,
+        "idiosyncratic_pct": 94.92,
+        "total_volatility": 0.0734,
+        "alpha_daily": 0.0001914,
+        "alpha_annual": 0.048232,
+        "beta": 0.0979,
+        "r_squared": 0.0508,
+        "alpha_t_stat": 1.618,
+        "alpha_p_value": 0.10588,
+        "n_obs": 1456
+      },
+      "benchmark_relative": {
+        "information_ratio": -0.5411,
+        "tracking_error": 0.168403,
+        "benchmark_return": 1.498868,
+        "benchmark_sharpe": 0.8776,
+        "excess_return": -0.905237
+      },
+      "deflated_sharpe": {
+        "observed_sharpe": 0.8627,
+        "probabilistic_sharpe": 0.9811,
+        "deflated_sharpe": 0.012,
+        "expected_max_sharpe": 1.8005,
+        "n_trials": 16,
+        "n_obs": 1457,
+        "skewness": 0.3611,
+        "excess_kurtosis": 20.2949,
+        "is_significant": false,
+        "interpretation": "Does not survive correction for 16 trials \u2014 the result is consistent with selection bias rather than a genuine edge."
+      },
+      "worst_drawdowns": [
+        {
+          "peak_date": "2026-02-26",
+          "trough_date": "2026-03-30",
+          "recovery_date": "2026-04-07",
+          "max_drawdown": -0.066636,
+          "duration_days": 28,
+          "recovered": true
+        },
+        {
+          "peak_date": "2025-10-28",
+          "trough_date": "2025-11-20",
+          "recovery_date": "2025-12-04",
+          "max_drawdown": -0.064991,
+          "duration_days": 27,
+          "recovered": true
+        },
+        {
+          "peak_date": "2025-12-11",
+          "trough_date": "2025-12-17",
+          "recovery_date": "2026-01-05",
+          "max_drawdown": -0.04478,
+          "duration_days": 16,
+          "recovered": true
+        },
+        {
+          "peak_date": "2026-01-29",
+          "trough_date": "2026-02-05",
+          "recovery_date": "2026-02-06",
+          "max_drawdown": -0.032232,
+          "duration_days": 7,
+          "recovered": true
+        },
+        {
+          "peak_date": "2025-10-10",
+          "trough_date": "2025-10-10",
+          "recovery_date": "2025-10-23",
+          "max_drawdown": -0.031881,
+          "duration_days": 10,
+          "recovered": true
+        }
+      ],
+      "yearly_returns": {
+        "2020": 0.0,
+        "2021": 0.0,
+        "2022": 0.0,
+        "2023": 0.0,
+        "2024": 0.0,
+        "2025": 0.280223,
+        "2026": 0.244807
+      }
+    },
+    "out_of_sample": {
+      "label": "out_of_sample",
+      "n_observations": 929,
+      "start_date": "2022-08-11",
+      "end_date": "2026-07-27",
+      "years": 3.69,
+      "returns": {
+        "total_return": 1.404104,
+        "cagr": 0.268636,
+        "annualized_return": 0.258625,
+        "best_day": 0.054985,
+        "worst_day": -0.067156,
+        "hit_rate_daily": 0.521
+      },
+      "risk_adjusted": {
+        "sharpe_ratio": 1.1775,
+        "sortino_ratio": 1.5172,
+        "calmar_ratio": 1.8261,
+        "omega_ratio": 1.2595
+      },
+      "risk": {
+        "annualized_volatility": 0.202651,
+        "downside_deviation": 0.159801,
+        "max_drawdown": -0.147106,
+        "avg_drawdown": -0.036858,
+        "max_drawdown_duration_days": 109,
+        "time_underwater_pct": 82.45,
+        "ulcer_index": 0.043211,
+        "skewness": -0.405,
+        "excess_kurtosis": 3.0691
+      },
+      "var": {
+        "portfolio_value": 1000000.0,
+        "var_95": {
+          "historical_pct": -0.020396,
+          "parametric_pct": -0.019972,
+          "cornish_fisher_pct": -0.020611,
+          "cvar_pct": -0.030943,
+          "historical_usd": 20396.1,
+          "cvar_usd": 30943.2
+        },
+        "var_99": {
+          "historical_pct": -0.038293,
+          "parametric_pct": -0.028671,
+          "cornish_fisher_pct": -0.040845,
+          "cvar_pct": -0.046868,
+          "historical_usd": 38293.24,
+          "cvar_usd": 46867.85
+        }
+      },
+      "attribution": {
+        "systematic_pct": 44.18,
+        "idiosyncratic_pct": 55.82,
+        "total_volatility": 0.202651,
+        "alpha_daily": 0.00044019,
+        "alpha_annual": 0.110928,
+        "beta": 0.8237,
+        "r_squared": 0.4418,
+        "alpha_t_stat": 1.403,
+        "alpha_p_value": 0.1608,
+        "n_obs": 929
+      },
+      "benchmark_relative": {
+        "information_ratio": 0.5425,
+        "tracking_error": 0.15412,
+        "benchmark_return": 1.498868,
+        "benchmark_sharpe": 0.8776,
+        "excess_return": -0.094763
+      },
+      "deflated_sharpe": {
+        "observed_sharpe": 1.1775,
+        "probabilistic_sharpe": 0.9868,
+        "deflated_sharpe": 0.1202,
+        "expected_max_sharpe": 1.8005,
+        "n_trials": 16,
+        "n_obs": 929,
+        "skewness": -0.405,
+        "excess_kurtosis": 3.0691,
+        "is_significant": false,
+        "interpretation": "Does not survive correction for 16 trials \u2014 the result is consistent with selection bias rather than a genuine edge."
+      },
+      "worst_drawdowns": [
+        {
+          "peak_date": "2026-06-23",
+          "trough_date": "2026-07-27",
+          "recovery_date": null,
+          "max_drawdown": -0.147106,
+          "duration_days": 24,
+          "recovered": false
+        },
+        {
+          "peak_date": "2022-09-13",
+          "trough_date": "2022-09-26",
+          "recovery_date": "2023-03-02",
+          "max_drawdown": -0.139173,
+          "duration_days": 109,
+          "recovered": true
+        },
+        {
+          "peak_date": "2024-11-29",
+          "trough_date": "2025-04-08",
+          "recovery_date": "2025-05-12",
+          "max_drawdown": -0.119688,
+          "duration_days": 102,
+          "recovered": true
+        },
+        {
+          "peak_date": "2024-03-08",
+          "trough_date": "2024-04-19",
+          "recovery_date": "2024-05-03",
+          "max_drawdown": -0.107057,
+          "duration_days": 31,
+          "recovered": true
+        },
+        {
+          "peak_date": "2024-05-29",
+          "trough_date": "2024-08-07",
+          "recovery_date": "2024-09-19",
+          "max_drawdown": -0.104124,
+          "duration_days": 79,
+          "recovered": true
+        }
+      ],
+      "yearly_returns": {
+        "2022": -0.040022,
+        "2023": 0.185691,
+        "2024": 0.287787,
+        "2025": 0.390848,
+        "2026": 0.179225
+      }
+    },
+    "comparison": {
+      "sharpe_is": 0.8627,
+      "sharpe_oos": 1.1775,
+      "sharpe_degradation_pct": -36.49,
+      "verdict": "Out-of-sample performance holds up well; little evidence of overfitting."
+    }
+  }
+}
