@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: quantedge-db
+    environment:
+      POSTGRES_USER: quantedge
+      POSTGRES_PASSWORD: quantedge
+      POSTGRES_DB: quantedge
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantedge -d quantedge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: quantedge-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://quantedge:quantedge@postgres:5432/quantedge
+      API_KEY: ${API_KEY:-quantedge-dev-key}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn quantedge.api.main:app --host 0.0.0.0 --port 8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quantedge-ui
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+
+volumes:
+  pgdata:
