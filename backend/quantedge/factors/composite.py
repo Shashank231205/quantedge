@@ -63,6 +63,13 @@ class CompositeFactor:
 
     Each component contributes a percentile rank already oriented so that
     higher means "prefer long", so the blend is a simple weighted average.
+
+    ``orientations`` optionally flips a component's sign. This exists because
+    a factor's textbook direction is a *prior*, not a fact: the low-volatility
+    anomaly, for instance, inverted over 2020-2026 (high-vol names
+    outperformed). The orientation must therefore be selectable — but it must
+    be selected on training data inside walk-forward validation, never by
+    inspecting full-sample results, which would be plain overfitting.
     """
 
     weights: dict[str, float] = field(
@@ -70,6 +77,8 @@ class CompositeFactor:
     )
     name: str = "composite"
     sector_neutral: bool = False
+    #: factor name -> +1 (textbook orientation) or -1 (inverted)
+    orientations: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         total = sum(self.weights.values())
@@ -88,7 +97,11 @@ class CompositeFactor:
         out: dict[str, pd.DataFrame] = {}
         for fname in self.weights:
             factor = get_factor(fname)
-            out[fname] = factor.signal(prices, **extra)
+            sig = factor.signal(prices, **extra)
+            if self.orientations.get(fname, 1) < 0:
+                # Ranks live in [0, 1], so inverting is 1 - rank.
+                sig = 1.0 - sig
+            out[fname] = sig
         return out
 
     def compute(
@@ -129,5 +142,6 @@ class CompositeFactor:
             "name": self.name,
             "weights": self.weights,
             "sector_neutral": self.sector_neutral,
+            "orientations": {f: self.orientations.get(f, 1) for f in self.weights},
             "components": [get_factor(f).describe() for f in self.weights],
         }
