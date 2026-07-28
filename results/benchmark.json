@@ -1,0 +1,29 @@
+{
+  "n_bars": 1506,
+  "n_tickers": 567,
+  "n_cells": 853902,
+  "naive_seconds": 5.951230833000409,
+  "vectorized_seconds": 0.3334977089998574,
+  "speedup": 17.84489270060609,
+  "reduction_pct": 94.39615571369596,
+  "results_match": true,
+  "max_abs_difference": 1.734723475976807e-17,
+  "n_repeats": 3,
+  "naive_times": [
+    5.972177542000281,
+    5.951230833000409,
+    5.971714625000459
+  ],
+  "vectorized_times": [
+    0.33574433400008274,
+    0.3334977089998574,
+    0.34593608300019696
+  ],
+  "environment": {
+    "python": "3.11.15",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "processor": "arm",
+    "numpy": "2.4.6",
+    "pandas": "3.0.5"
+  }
+}
