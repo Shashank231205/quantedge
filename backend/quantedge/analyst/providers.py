@@ -122,6 +122,9 @@ class _OpenAICompatProvider:
     def available(self) -> bool:
         return bool(self.api_key)
 
+    def extra_headers(self) -> dict[str, str]:
+        return {}
+
     def complete(self, system: str, user: str) -> Completion:
         try:
             resp = httpx.post(
@@ -129,11 +132,18 @@ class _OpenAICompatProvider:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
+                    **self.extra_headers(),
                 },
                 json={
                     "model": self.model,
                     "messages": [
-                        {"role": "system", "content": system},
+                        # Groq rejects json_object mode unless the word "json"
+                        # appears in the messages, so the instruction is stated
+                        # here rather than left to the caller's prompt wording.
+                        {
+                            "role": "system",
+                            "content": f"{system}\n\nRespond with a single JSON object.",
+                        },
                         {"role": "user", "content": user},
                     ],
                     "response_format": {"type": "json_object"},
@@ -169,6 +179,14 @@ class OpenRouterProvider(_OpenAICompatProvider):
             _key(settings.openrouter_api_key, "OPENROUTER_API_KEY"),
             settings.openrouter_model,
         )
+
+    def extra_headers(self) -> dict[str, str]:
+        """OpenRouter attributes free-tier usage to the referring app, and
+        unattributed traffic is deprioritised when models are busy."""
+        return {
+            "HTTP-Referer": settings.openrouter_referer,
+            "X-Title": "QUANTEDGE",
+        }
 
 
 class TemplateProvider:

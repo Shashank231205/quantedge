@@ -112,11 +112,19 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     openrouter_api_key: str | None = None
-    openrouter_model: str = "deepseek/deepseek-chat-v3.1:free"
+    # OpenRouter's free catalogue turns over -- a model id that worked last
+    # month may simply not exist today, and an unknown id fails at request time
+    # rather than at startup. Check /api/v1/models before changing this.
+    openrouter_model: str = "openai/gpt-oss-20b:free"
+    openrouter_referer: str = "https://github.com/Shashank231205/quantedge"
     # Reports are recomputed rarely and cost a provider call, so a generous
     # cache keeps repeat views free.
     analyst_cache_seconds: float = 900.0
-    analyst_timeout_seconds: float = 60.0
+    # Free-tier models queue behind paid traffic and a full seven-metric report
+    # can take minutes on a busy one. The timeout is generous because giving up
+    # early costs a provider that would have answered; the chain still moves on
+    # if it genuinely stalls.
+    analyst_timeout_seconds: float = 180.0
 
     @classmethod
     def settings_customise_sources(cls, settings_cls, **kwargs):  # noqa: ANN206
