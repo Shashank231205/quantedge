@@ -1,0 +1,42 @@
+# Render blueprint: Postgres + FastAPI.
+#
+# The frontend is NOT here — it deploys to Vercel as a static SPA (see
+# vercel.json). Only the stateful half of the stack lives on Render.
+#
+# Deploy with: render blueprint launch   (or connect the repo in the dashboard)
+
+databases:
+  - name: quantedge-db
+    databaseName: quantedge
+    user: quantedge
+    plan: free
+
+services:
+  - type: web
+    name: quantedge-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    # Migrations run on every deploy; they are idempotent. Seeding market data
+    # is a separate, explicit step (scripts/seed_cloud.sh) because a full
+    # ingest takes ~15 minutes and must not run on every restart.
+    dockerCommand: >
+      sh -c "alembic upgrade head &&
+             uvicorn quantedge.api.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: quantedge-db
+          property: connectionString
+      - key: API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # Vercel preview deployments get a fresh hostname per commit, so they
+      # cannot be listed in CORS_ORIGINS ahead of time.
+      - key: CORS_ORIGIN_REGEX
+        value: https://.*\.vercel\.app
+      - key: PYTHON_VERSION
+        value: "3.11"

@@ -205,10 +205,12 @@ make ingest      # backfill OHLCV (~3 min for 567 tickers x 6 years)
 make backtest    # walk-forward validation, prints the honest metrics
 make benchmark   # naive vs vectorized, with parity verification
 
-make serve       # API on :8000  (docs at /docs)
-make ui          # dashboard on :5173
+make dev         # API on :8000 and dashboard on :5173, together
 make test        # 163 tests
 ```
+
+`make dev` runs both servers in one terminal with prefixed output; Ctrl-C stops
+both. To run them separately, `make serve` and `make ui` in two shells.
 
 Or the whole stack:
 
@@ -264,6 +266,45 @@ API p95 latency is measured by middleware on every request. It currently
 reads **99.6ms against a 200ms target** — after a fix, since serving the risk
 screen originally recomputed a full backtest per request and put p95 at
 49,502ms.
+
+---
+
+## Deploying it
+
+The two halves deploy to different places, because they are different kinds of
+thing. The dashboard is a static SPA and belongs on a CDN. The API is stateful —
+it holds a warm in-process cache over 837k OHLCV rows and serves WebSockets — so
+it needs a real long-lived process, not a serverless function.
+
+| Component | Host | Config |
+|---|---|---|
+| Dashboard | Vercel | `vercel.json` |
+| API + PostgreSQL | Render | `render.yaml` |
+
+**1. Backend.** Point Render at this repo; the blueprint provisions PostgreSQL
+and the API together. Set two env vars it deliberately does not commit:
+`API_KEY` (any random string) and `CORS_ORIGINS` (your Vercel URL). Migrations
+run automatically on each deploy.
+
+**2. Seed the database.** A fresh deployment has schema but no market data, and
+every screen will honestly render its empty state until this runs. From a Render
+shell on the API service:
+
+```bash
+bash scripts/seed_cloud.sh    # universe -> ingest -> factors -> backtest
+```
+
+This takes 15-25 minutes, almost all of it the yfinance backfill. It is
+idempotent, so a failed step can simply be re-run.
+
+**3. Frontend.** Import the repo into Vercel — `vercel.json` already sets the
+build. Add `VITE_API_URL` (your Render URL) and `VITE_API_KEY` (the same
+`API_KEY`). Note that `VITE_*` values are inlined into the bundle at build time
+and are therefore public; the demo key is read-only by design, and nothing
+secret should ever be passed this way.
+
+On free tiers the Render service sleeps when idle, so the first request after a
+quiet period takes ~50s to wake it.
 
 ---
 

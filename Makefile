@@ -99,6 +99,14 @@ schedule:
 ui:
 	cd frontend && npm run dev
 
+# API and dashboard together in one terminal. Ctrl-C stops both: the trap kills
+# the whole process group, so uvicorn is never orphaned holding port 8000.
+dev:
+	@trap 'kill 0' EXIT INT TERM; \
+	( cd backend && .venv/bin/uvicorn quantedge.api.main:app --reload --port 8000 2>&1 | sed 's/^/[api] /' ) & \
+	( cd frontend && npm run dev 2>&1 | sed 's/^/[ui ] /' ) & \
+	wait
+
 up:
 	docker compose up --build
 

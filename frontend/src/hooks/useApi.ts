@@ -84,8 +84,16 @@ export function useWebSocket(path = '/ws/events') {
     let closed = false
 
     const connect = () => {
+      // In development the Vite proxy fronts the API, so same-origin is right.
+      // Deployed, the API lives on a different host and VITE_API_URL points at
+      // it — deriving the socket URL from window.location would aim the socket
+      // at the static host, which serves no WebSocket at all.
+      const base = import.meta.env.VITE_API_URL
+      const origin = base ? base.replace(/^http/, 'ws') : null
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${proto}//${window.location.host}${path}`)
+      const ws = new WebSocket(
+        origin ? `${origin}${path}` : `${proto}//${window.location.host}${path}`,
+      )
       wsRef.current = ws
 
       ws.onopen = () => setConnected(true)

@@ -36,3 +36,6 @@ dist/
 results/*.png
 results/*.html
 !results/.gitkeep
+
+# TypeScript incremental build cache
+*.tsbuildinfo
