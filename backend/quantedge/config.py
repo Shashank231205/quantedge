@@ -104,7 +104,11 @@ class Settings(BaseSettings):
     # quota, not just a spare credential: when the first key exhausts its daily
     # limit the chain moves to this one instead of degrading to templates.
     gemini_api_key_2: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # Alias rather than a pinned version. Google retires pinned models for new
+    # projects while keeping them for existing ones, so a hard-coded version
+    # works on an older key and 404s on a newer one -- which looks like a bad
+    # credential and is not.
+    gemini_model: str = "gemini-flash-latest"
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     openrouter_api_key: str | None = None
