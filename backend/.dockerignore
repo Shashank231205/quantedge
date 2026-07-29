@@ -1,0 +1,36 @@
+# `COPY . .` takes everything not listed here, so this file is the only thing
+# standing between a local working directory and the published image.
+
+# Secrets. Without this line the API keys in .env are baked into every layer
+# and readable by anyone who pulls the image — gitignore does not help, because
+# Docker reads the working directory, not the index.
+.env
+.env.*
+!.env.example
+
+# The image builds its own dependencies; a host venv is both useless inside the
+# container (wrong platform, absolute paths) and the single largest thing in
+# the build context.
+.venv/
+venv/
+
+# Caches and build artefacts.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Market data is fetched at runtime by the seed script, not shipped.
+../data/
+*.parquet
+*.csv
+
+# Repo furniture with no bearing on the running service.
+.git/
+.github/
+tests/
+*.md

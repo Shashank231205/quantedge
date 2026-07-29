@@ -40,3 +40,21 @@ services:
         value: https://.*\.vercel\.app
       - key: PYTHON_VERSION
         value: "3.11"
+
+      # Model providers for the Analyst and INU AI screens. All free tiers.
+      #
+      # `sync: false` means Render prompts for the value rather than reading it
+      # from this file, so no key is ever committed. Every one is optional: the
+      # Analyst falls back to rule-based templates and INU says plainly that it
+      # cannot reach a model, so an instance without keys degrades rather than
+      # errors. Set at least GROQ_API_KEY for the chat to answer at all.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # Gemini is Analyst-only. INU routes across Groq and OpenRouter, which
+      # are the two with free open-weight models.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false

@@ -282,9 +282,29 @@ it needs a real long-lived process, not a serverless function.
 | API + PostgreSQL | Render | `render.yaml` |
 
 **1. Backend.** Point Render at this repo; the blueprint provisions PostgreSQL
-and the API together. Set two env vars it deliberately does not commit:
-`API_KEY` (any random string) and `CORS_ORIGINS` (your Vercel URL). Migrations
-run automatically on each deploy.
+and the API together. Migrations run automatically on each deploy.
+
+Render prompts for every secret rather than reading it from `render.yaml`, so
+nothing sensitive is committed. Two are required:
+
+| Variable | Value |
+|---|---|
+| `API_KEY` | Any random string. The frontend sends it as `X-API-Key`. |
+| `CORS_ORIGINS` | Your Vercel URL, once you have it from step 3. |
+
+The model provider keys are optional, and what you lose without them is
+specific rather than fatal:
+
+| Variable | Free from | Without it |
+|---|---|---|
+| `GROQ_API_KEY` | console.groq.com/keys | INU AI cannot answer at all |
+| `OPENROUTER_API_KEY` | openrouter.ai/settings/keys | No image or long-document support |
+| `GEMINI_API_KEY` | aistudio.google.com/apikey | Analyst has one fewer fallback |
+
+The Analyst screen still renders a full assessment with no keys at all — the
+scores come from the rubric, and only the prose falls back to templates. INU AI
+degrades less gracefully because a chat with no model has nothing to say, so it
+states that plainly instead of erroring.
 
 **2. Seed the database.** A fresh deployment has schema but no market data, and
 every screen will honestly render its empty state until this runs. From a Render
