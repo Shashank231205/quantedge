@@ -8,20 +8,74 @@
  * claim so nothing has to be taken on trust.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   Empty,
   ErrorState,
   Label,
   Loading,
+  Cell,
   Panel,
   Pill,
   Provenance,
+  Th,
 } from '../components/Primitives'
 import { api, type AnalystCitation, type AnalystMetric, type AnalystReport, type AnalystStatus } from '../lib/api'
 
 const UNIVERSE_OPTIONS = [10, 25, 50, 100, 567]
+const UNIVERSE_MAX = 567
+
+/**
+ * What the universe control actually does, stated where the user reaches for
+ * it. The assessment above always describes the run, which was backtested
+ * across the whole universe -- a control that appeared to re-score the
+ * strategy would misrepresent every number on the screen.
+ */
+function UniverseInfo() {
+  const [open, setOpen] = useState(false)
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="What does this number mean?"
+        className={`flex h-5 w-5 items-center justify-center border font-mono text-2xs transition-colors ${
+          open
+            ? 'border-mint bg-mint/20 text-mint'
+            : 'border-edge text-ink-faint hover:border-mint/50 hover:text-mint'
+        }`}
+      >
+        i
+      </button>
+      {open ? (
+        <>
+          <span
+            className="fixed inset-0 z-20 cursor-default"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <span className="absolute right-0 top-7 z-30 block w-[min(26rem,80vw)] border border-mint/40 bg-base-raised p-3 text-left shadow-2xl">
+            <span className="mb-1 block font-mono text-2xs uppercase tracking-wide text-mint">
+              Ranking depth
+            </span>
+            <span className="block text-xs leading-relaxed text-ink-dim">
+              How many of the {UNIVERSE_MAX} ranked names the holdings table
+              below lists — 10 shows the strongest signals, 567 shows the whole
+              universe.
+            </span>
+            <span className="mt-2 block border-t border-edge pt-2 text-xs leading-relaxed text-ink-dim">
+              It does not change the assessment. Every score above comes from
+              the walk-forward run, which traded the full universe regardless of
+              this setting.
+            </span>
+          </span>
+        </>
+      ) : null}
+    </span>
+  )
+}
 
 /** Bands map to the same tones the rest of the app uses for good/bad. */
 const BAND_TONE: Record<string, string> = {
@@ -147,13 +201,29 @@ export default function Analyst() {
   const [report, setReport] = useState<AnalystReport | null>(null)
   const [status, setStatus] = useState<AnalystStatus | null>(null)
   const [universe, setUniverse] = useState(50)
+  const [custom, setCustom] = useState(false)
+  const [customText, setCustomText] = useState('50')
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Generating a report takes seconds, so a user who changes the depth twice
+  // has two requests in flight. Without a guard the slower one lands last and
+  // the table ends up showing a depth the controls no longer say — stamp each
+  // request and ignore any response that a newer one has superseded.
+  const requestSeq = useRef(0)
+
+  // Holds the depth the last request was issued for. `load` reads it instead
+  // of the state value so the callback never depends on `universe` -- a
+  // dependency there would rebuild `load` on every change and strand handlers
+  // that had already captured the previous one.
+  const sizeRef = useRef(50)
+
   const load = useCallback(
     async (opts: { refresh?: boolean; size?: number } = {}) => {
-      const size = opts.size ?? universe
+      const size = opts.size ?? sizeRef.current
+      sizeRef.current = size
+      const seq = ++requestSeq.current
       opts.refresh ? setRunning(true) : setLoading(true)
       setError(null)
       try {
@@ -161,17 +231,30 @@ export default function Analyst() {
           api.analystReport({ universeSize: size, refresh: opts.refresh }),
           api.analystStatus(),
         ])
+        if (seq !== requestSeq.current) return
         setReport(r)
         setStatus(s)
       } catch (e) {
+        if (seq !== requestSeq.current) return
         setError(e instanceof Error ? e.message : String(e))
       } finally {
-        setLoading(false)
-        setRunning(false)
+        if (seq === requestSeq.current) {
+          setLoading(false)
+          setRunning(false)
+        }
       }
     },
-    [universe],
+    [],
   )
+
+  /** Clamp rather than reject: a typo shouldn't discard the input, and the
+   *  bounds are what the ranking can actually serve. */
+  const applyCustom = useCallback(() => {
+    const n = Math.max(1, Math.min(UNIVERSE_MAX, Number(customText) || 1))
+    setCustomText(String(n))
+    setUniverse(n)
+    void load({ size: n, refresh: true })
+  }, [customText, load])
 
   useEffect(() => {
     void load()
@@ -194,10 +277,17 @@ export default function Analyst() {
         badge={report.verdict}
         badgeTone={verdictTone as 'mint' | 'warn' | 'danger' | 'info'}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <UniverseInfo />
             <select
-              value={universe}
+              value={custom ? 'custom' : universe}
               onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setCustom(true)
+                  setCustomText(String(universe))
+                  return
+                }
+                setCustom(false)
                 const size = Number(e.target.value)
                 setUniverse(size)
                 void load({ size, refresh: true })
@@ -206,10 +296,43 @@ export default function Analyst() {
             >
               {UNIVERSE_OPTIONS.map((n) => (
                 <option key={n} value={n} className="bg-base-raised">
-                  TOP {n === 567 ? 'ALL' : n}
+                  TOP {n === UNIVERSE_MAX ? 'ALL' : n}
                 </option>
               ))}
+              <option value="custom" className="bg-base-raised">
+                CUSTOM…
+              </option>
             </select>
+
+            {custom ? (
+              // Plain elements rather than a <form>: this sits inside the
+              // Panel's actions slot, where a nested form's submit event does
+              // not reach a handler. Enter is wired explicitly instead.
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={UNIVERSE_MAX}
+                  value={customText}
+                  onChange={(e) => setCustomText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      applyCustom()
+                    }
+                  }}
+                  aria-label={`Custom ranking depth, 1 to ${UNIVERSE_MAX}`}
+                  className="w-16 border border-edge bg-transparent px-2 py-1 text-right font-mono text-2xs text-ink focus:border-mint focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={applyCustom}
+                  className="border border-edge px-2 py-1 font-mono text-2xs uppercase text-ink-dim transition-colors hover:border-mint hover:text-mint"
+                >
+                  Set
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => void load({ refresh: true })}
@@ -281,6 +404,49 @@ export default function Analyst() {
           <MetricCard key={m.key} metric={m} />
         ))}
       </div>
+
+      {report.holdings && report.holdings.rows.length > 0 ? (
+        <Panel
+          title="Current Ranking"
+          actions={
+            <span className="font-mono text-2xs text-ink-faint">
+              TOP {report.holdings.rows.length} OF {UNIVERSE_MAX} · AS OF{' '}
+              {report.holdings.as_of ?? '—'}
+            </span>
+          }
+        >
+          <div className="max-h-80 overflow-y-auto">
+            <table className="w-full">
+              <thead className="sticky top-0 bg-base-panel">
+                <tr className="border-b border-edge">
+                  <Th>#</Th>
+                  <Th>Ticker</Th>
+                  <Th align="right">Composite</Th>
+                  <Th>Bias</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.holdings.rows.map((row, i) => (
+                  <tr key={row.ticker} className="border-b border-edge/50">
+                    <Cell tone="text-ink-faint">{i + 1}</Cell>
+                    <Cell tone="text-ink">{row.ticker}</Cell>
+                    <Cell align="right" tone="text-ink">
+                      {row.composite_score.toFixed(4)}
+                    </Cell>
+                    <Cell>
+                      <Pill
+                        text={row.bias}
+                        tone={row.bias === 'LONG' ? 'mint' : 'danger'}
+                      />
+                    </Cell>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Provenance>{report.holdings.note}</Provenance>
+        </Panel>
+      ) : null}
 
       {status ? (
         <Panel title="Provider Chain">

@@ -98,5 +98,43 @@ def report(
     result = report_to_dict(
         generate_report(metrics, context, universe_size=universe_size)
     )
+    result["holdings"] = _top_holdings(universe_size)
     _cache.set(key, result)
     return {**result, "cached": False}
+
+
+def _top_holdings(limit: int) -> dict:
+    """The current ranking, cut to the requested depth.
+
+    This is what the universe control actually selects. The assessment itself
+    always describes the run, which was backtested across the full universe --
+    narrowing the list here changes how much of the ranking a reader sees, not
+    what was measured. Saying so matters: a control that looked like it
+    re-scored the strategy would misrepresent the numbers above it.
+    """
+    # Calls the strategy directly rather than the /portfolio/signals route,
+    # whose own limit caps at 100 -- this control goes to the full universe.
+    from sqlalchemy import func, select
+
+    from quantedge.db.models import OhlcvClean
+    from quantedge.strategy import current_signals
+
+    try:
+        df = current_signals(top_n=limit)
+        rows = df.to_dict("records") if not df.empty else []
+        # The signal frame is indexed by rank, not date, so the as-of comes
+        # from the data itself rather than the frame.
+        with session_scope() as s:
+            as_of = s.scalar(select(func.max(OhlcvClean.date)))
+    except Exception as exc:  # pragma: no cover - ranking is supplementary
+        log.warning("analyst.holdings_unavailable %s", exc)
+        return {"as_of": None, "rows": [], "note": "Ranking unavailable."}
+
+    return {
+        "as_of": str(as_of) if as_of else None,
+        "rows": rows[:limit],
+        "note": (
+            "Current factor ranking, shown to the selected depth. The strategy "
+            "was backtested across the full universe regardless of this setting."
+        ),
+    }

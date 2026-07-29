@@ -497,6 +497,17 @@ export interface AnalystMetric {
   citations: AnalystCitation[]
 }
 
+export interface AnalystHoldings {
+  as_of: string | null
+  rows: {
+    ticker: string
+    composite_score: number
+    bias: string
+    [key: string]: string | number
+  }[]
+  note: string
+}
+
 export interface AnalystReport {
   run_id: number
   run_name: string
@@ -511,6 +522,7 @@ export interface AnalystReport {
   is_template: boolean
   notes: string[]
   cached: boolean
+  holdings?: AnalystHoldings
 }
 
 export interface SystemInfo {
