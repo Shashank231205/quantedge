@@ -170,7 +170,15 @@ def to_price_panel(df: pd.DataFrame, field: str = "close") -> pd.DataFrame:
     """Long format -> wide panel (index=date, columns=ticker).
 
     The vectorized engine and every factor operate on this shape.
+
+    An unseeded database yields a frame with no columns at all, and pivoting
+    that raises KeyError on the value column rather than returning something
+    empty. Callers upstream treat an empty panel as "no data yet" and render an
+    empty state, so give them one instead of a crash.
     """
+    if df.empty and field not in df.columns:
+        return pd.DataFrame(index=pd.DatetimeIndex([], name="date"))
+
     panel = df.pivot_table(index="date", columns="ticker", values=field, aggfunc="last")
     panel.index = pd.to_datetime(panel.index)
     return panel.sort_index()
