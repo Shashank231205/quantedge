@@ -10,6 +10,8 @@ Two things matter beyond "does it return 200":
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -180,3 +182,110 @@ class TestValidation:
     def test_unknown_ticker_returns_404(self, client):
         resp = client.get("/v1/factors/NOTATICKER/detail", headers=HEADERS)
         assert resp.status_code in (404, 500)
+
+
+class TestInuContract:
+    """The chat surface, without calling a model.
+
+    These exist because the INU upload route broke the entire app once: FastAPI
+    validates form parameters at import time, so a missing `python-multipart`
+    raised during collection rather than on a request, and every test in this
+    file failed with an error that named none of them.
+    """
+
+    def test_upload_route_is_constructible(self, client):
+        """Guards the dependency that FastAPI needs at import, not at request.
+
+        If `python-multipart` is missing from the manifest this fails here with
+        a clear message, rather than taking down collection for the suite.
+
+        Asserted against the published schema rather than `app.routes`, which
+        stopped listing included routes in FastAPI 0.140.
+        """
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "/v1/inu/chat/upload" in paths
+
+    def test_status_lists_only_free_models(self, client):
+        r = client.get("/v1/inu/status", headers=HEADERS)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["models"], "no models advertised"
+        # Every routed model must be free: Groq's tier is free outright, and an
+        # OpenRouter id has to carry the :free suffix to cost nothing.
+        for m in body["models"]:
+            assert m["provider"] in {"groq", "openrouter"}
+            if m["provider"] == "openrouter":
+                assert m["id"].endswith(":free"), f"{m['id']} is not a free model"
+
+    def test_tools_are_advertised_with_descriptions(self, client):
+        r = client.get("/v1/inu/status", headers=HEADERS)
+        tools = r.json()["tools"]
+        assert len(tools) >= 5
+        for t in tools:
+            assert t["description"].strip(), f"{t['name']} has no description"
+
+    def test_conversation_endpoints_require_auth(self, client):
+        for path in ("/v1/inu/status", "/v1/inu/conversations"):
+            assert client.get(path).status_code == 401
+
+    def test_unknown_conversation_returns_404(self, client):
+        r = client.get("/v1/inu/conversations/99999999", headers=HEADERS)
+        assert r.status_code == 404
+
+
+class TestInuTools:
+    """Tools must return real platform data, never invented values."""
+
+    def test_every_tool_executes(self):
+        from quantedge.inu import tools
+
+        for name in tools.TOOLS:
+            payload = json.loads(tools.execute(name, "{}"))
+            assert isinstance(payload, dict)
+
+    def test_significance_reports_the_honest_verdict(self):
+        """The figure the whole platform's credibility rests on.
+
+        If a tool ever reported significance without the deflated Sharpe, the
+        chat could quote a 1.42 Sharpe as though it were proven.
+        """
+        from quantedge.inu import tools
+
+        payload = json.loads(tools.execute("get_significance", "{}"))
+        if "error" in payload:
+            pytest.skip("no run to assess")
+        assert "deflated_sharpe" in payload
+        assert "is_significant" in payload
+        assert payload["decision_rule"]
+
+    def test_unknown_tool_is_reported_not_raised(self):
+        from quantedge.inu import tools
+
+        assert "error" in json.loads(tools.execute("does_not_exist", "{}"))
+
+
+class TestInuAgent:
+    """Prose safety, checked without a network call."""
+
+    def test_tool_markup_never_reaches_the_user(self):
+        """Small models sometimes write a tool call as literal text."""
+        from quantedge.inu.agent import strip_tool_markup
+
+        leaked = "The Sharpe is 1.42. <function=get_significance>{}</function>"
+        assert "<function=" not in strip_tool_markup(leaked)
+        assert "1.42" in strip_tool_markup(leaked)
+
+    def test_inline_tool_calls_are_recovered(self):
+        from quantedge.inu.agent import _inline_tool_calls
+
+        found = _inline_tool_calls("<function=get_performance>{}</function>")
+        assert found and found[0][0] == "get_performance"
+
+    def test_routing_respects_size_and_attachments(self):
+        from quantedge.inu.models import Task, route
+
+        # An image must reach a model that can actually see it.
+        assert route(Task.CHAT, has_image=True)[0].provider == "openrouter"
+        # A prompt too large for Groq's per-minute ceiling must not be sent there.
+        big = route(Task.CHAT, prompt_chars=400_000)[0]
+        assert big.tpm is None or big.tpm > 5000

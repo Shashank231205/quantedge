@@ -27,6 +27,12 @@ dependencies = [
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
     "websockets>=12.0",
+    # Required by the INU file-upload route. FastAPI raises at import time
+    # without it, not at request time, so a missing entry here breaks the whole
+    # app rather than one endpoint.
+    "python-multipart>=0.0.9",
+    # INU calls the model providers directly over HTTP.
+    "httpx>=0.27",
 
     # Scheduling
     "apscheduler>=3.10",
