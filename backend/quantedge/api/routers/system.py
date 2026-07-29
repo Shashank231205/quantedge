@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
-from quantedge.api.deps import require_api_key
+from quantedge.api.deps import TTLCache, require_api_key
 from quantedge.api.middleware import latency_stats
 from quantedge.config import settings
 from quantedge.db.models import ApiRequestLog, JobRun, OhlcvClean, Security
@@ -34,6 +34,21 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 #: The jobs this platform actually runs.
 KNOWN_JOBS = ("ohlcv_ingest", "universe_refresh", "factor_compute", "backtest_nightly")
+
+#: Coverage is two sequential scans of ohlcv_clean — COUNT(*) and
+#: COUNT(DISTINCT ticker) over 837k rows, measured at 88ms and 66ms. That was
+#: the whole cost of /status and /ingestion, which the Pipeline screen polls.
+#: The numbers only move when ingest writes, so serving them from a short
+#: cache costs nothing in freshness.
+_coverage_cache = TTLCache(ttl_seconds=60.0)
+
+
+def cached_coverage() -> dict:
+    hit = _coverage_cache.get("coverage")
+    if hit is None:
+        hit = coverage_stats()
+        _coverage_cache.set("coverage", hit)
+    return hit
 
 
 @router.get("/health")
@@ -58,7 +73,7 @@ def health() -> dict:
 def system_status() -> dict:
     """Top KPI strip: integrity, uptime, worker count, last sync."""
     uptime = compute_uptime(days=30)
-    coverage = coverage_stats()
+    coverage = cached_coverage()
 
     with session_scope() as s:
         last_success = s.scalars(
@@ -130,7 +145,7 @@ def jobs(limit: int = Query(default=20, le=100)) -> dict:
 @router.get("/ingestion", dependencies=[Depends(require_api_key)])
 def ingestion_stats() -> dict:
     """Data Ingestion Engine panel — real counts from the last run."""
-    coverage = coverage_stats()
+    coverage = cached_coverage()
 
     with session_scope() as s:
         last = s.scalars(
