@@ -307,15 +307,24 @@ degrades less gracefully because a chat with no model has nothing to say, so it
 states that plainly instead of erroring.
 
 **2. Seed the database.** A fresh deployment has schema but no market data, and
-every screen will honestly render its empty state until this runs. From a Render
-shell on the API service:
+every screen will honestly render its empty state until this runs.
+
+Render's free tier has no shell, so there are two paths depending on your plan:
 
 ```bash
-bash scripts/seed_cloud.sh    # universe -> ingest -> factors -> backtest
+# Paid plan — from a Render shell on the API service:
+bash scripts/seed_cloud.sh
+
+# Free plan — from your own machine, over the database's public endpoint.
+# Put the provider's External Database URL in backend/.env.render first:
+#   RENDER_DATABASE_URL=postgresql://user:pass@host.oregon-postgres.render.com/db
+bash scripts/seed_remote.sh
 ```
 
-This takes 15-25 minutes, almost all of it the yfinance backfill. It is
-idempotent, so a failed step can simply be re-run.
+Both run the same pipeline — universe, ingest, factors, backtest — because it
+only needs a `DATABASE_URL` and does not care where the database lives. Expect
+15-25 minutes in-container, a little longer remotely since every write crosses
+the network. Both are idempotent, so a failed step can simply be re-run.
 
 **3. Frontend.** Import the repo into Vercel — `vercel.json` already sets the
 build. Add `VITE_API_URL` (your Render URL) and `VITE_API_KEY` (the same
