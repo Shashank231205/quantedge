@@ -10,7 +10,6 @@ from quantedge.api.deps import require_api_key
 from quantedge.backtest.persistence import latest_run, list_runs
 from quantedge.db.models import BacktestRun, PortfolioSnapshot, Trade, WalkForwardFold
 from quantedge.db.session import session_scope
-from quantedge.strategy import DEFAULT_SPEC
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
@@ -34,6 +33,8 @@ def runs(limit: int = Query(default=20, le=100)) -> dict:
 @router.get("/strategy", dependencies=[Depends(require_api_key)])
 def strategy_spec() -> dict:
     """The canonical production strategy definition."""
+    from quantedge.strategy import DEFAULT_SPEC
+
     return {
         "spec": DEFAULT_SPEC.as_dict(),
         "rationale": {

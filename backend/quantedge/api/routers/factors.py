@@ -10,13 +10,11 @@ from sqlalchemy import select
 from quantedge.api.deps import cache, require_api_key
 from quantedge.db.models import Security
 from quantedge.db.session import session_scope
-from quantedge.factors.composite import CORE_FACTORS, CompositeFactor, get_factor
 from quantedge.factors.diagnostics import (
     cross_factor_correlation,
     ic_decay,
 )
 from quantedge.logging_config import get_recent_logs
-from quantedge.strategy import FACTOR_WEIGHTS, load_panel
 
 router = APIRouter(prefix="/factors", tags=["factors"])
 
@@ -24,7 +22,16 @@ PRODUCTION_ORIENTATION = {"volatility": -1}
 
 
 def _signals() -> tuple[pd.DataFrame, dict[str, pd.DataFrame], pd.DataFrame]:
-    """Price panel, per-factor signals and the composite (cached)."""
+    """Price panel, per-factor signals and the composite (cached).
+
+    The strategy and factor imports are deferred into this function. At module
+    level they pull scipy, statsmodels and the backtest engine into every API
+    process at startup -- ~220MB that the endpoints reading precomputed rows
+    never touch.
+    """
+    from quantedge.factors.composite import CompositeFactor
+    from quantedge.strategy import FACTOR_WEIGHTS, load_panel
+
     cached = cache.get("factor_signals")
     if cached is not None:
         return cached
@@ -253,6 +260,9 @@ def ticker_detail(ticker: str, lookback: int = Query(default=252, le=1500)) -> d
 @router.get("/list", dependencies=[Depends(require_api_key)])
 def list_factors() -> dict:
     """Registry of available factors and the production weighting."""
+    from quantedge.factors.composite import CORE_FACTORS, get_factor
+    from quantedge.strategy import FACTOR_WEIGHTS
+
     return {
         "core_factors": list(CORE_FACTORS),
         "production_weights": FACTOR_WEIGHTS,
