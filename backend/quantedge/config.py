@@ -84,6 +84,26 @@ class Settings(BaseSettings):
     cors_origin_regex: str | None = None
     log_buffer_size: int = 500
 
+    # --- Analyst mode -------------------------------------------------------
+    # The analyst writes the prose of a report; it never decides a score. Every
+    # number and verdict comes from quantedge.analyst.rubric, so swapping the
+    # provider changes the wording and nothing else.
+    #
+    # Providers are tried in order and the first one holding a key wins. With
+    # no keys at all the report still renders from templates, which is why a
+    # deployment without credentials degrades rather than breaks.
+    analyst_providers: list[str] = ["gemini", "groq", "openrouter", "template"]
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "deepseek/deepseek-chat-v3.1:free"
+    # Reports are recomputed rarely and cost a provider call, so a generous
+    # cache keeps repeat views free.
+    analyst_cache_seconds: float = 900.0
+    analyst_timeout_seconds: float = 60.0
+
     @classmethod
     def settings_customise_sources(cls, settings_cls, **kwargs):  # noqa: ANN206
         """pydantic-settings JSON-decodes complex fields straight from the
