@@ -33,6 +33,19 @@ def _live_portfolio():
     if cached is not None:
         return cached
 
+    # Prefer the book the snapshot step already computed. Running a full-sample
+    # backtest per request needs the whole price panel resident, which a small
+    # instance cannot hold -- and the answer is the same either way.
+    from quantedge.factors.snapshot import read_diagnostic
+
+    book = read_diagnostic("live_book")
+    if book and book.get("weights"):
+        weights = pd.Series(book["weights"], dtype=float)
+        vols = pd.Series(book.get("volatility") or {}, dtype=float)
+        payload = (_StoredRun(), None, weights, vols, None)
+        cache.set("live_portfolio", payload)
+        return payload
+
     result, panel, benchmark, _ = run_full_sample(DEFAULT_SPEC)
     weights = result.weights.iloc[-1]
     vols = realized_volatility(panel, window=60).iloc[-1]
@@ -40,6 +53,55 @@ def _live_portfolio():
     payload = (result, panel, weights, vols, benchmark)
     cache.set("live_portfolio", payload)
     return payload
+
+
+def _as_of(panel) -> str:
+    """The date this view describes.
+
+    On the stored path there is no panel to read it from, so fall back to the
+    snapshot's own as-of. Both name the same bar; only the source differs.
+    """
+    if panel is not None and len(panel.index):
+        return str(panel.index[-1].date())
+
+    from quantedge.factors.snapshot import read_diagnostic
+
+    book = read_diagnostic("live_book") or {}
+    return book.get("as_of") or "unknown"
+
+
+class _StoredRun:
+    """Equity and returns read from the persisted run.
+
+    The risk endpoints need a drawdown series and a return series, both of
+    which the last walk-forward run already recorded. Re-deriving them by
+    re-running the backtest per request is what made this screen unaffordable
+    on a small instance.
+    """
+
+    def __init__(self) -> None:
+        from quantedge.db.models import BacktestRun, PortfolioSnapshot
+
+        with session_scope() as s:
+            run = s.scalars(
+                select(BacktestRun)
+                .where(BacktestRun.is_walk_forward.is_(True))
+                .order_by(BacktestRun.created_at.desc())
+                .limit(1)
+            ).first()
+            rows = (
+                s.execute(
+                    select(PortfolioSnapshot.date, PortfolioSnapshot.equity)
+                    .where(PortfolioSnapshot.run_id == run.id)
+                    .order_by(PortfolioSnapshot.date)
+                ).all()
+                if run
+                else []
+            )
+
+        idx = pd.to_datetime([r.date for r in rows])
+        self.equity_curve = pd.Series([float(r.equity) for r in rows], index=idx)
+        self.returns = self.equity_curve.pct_change().dropna()
 
 
 def warm_cache() -> None:
@@ -76,7 +138,7 @@ def risk_summary() -> dict:
         "portfolio_volatility": round(
             float(result.returns.iloc[-60:].std() * (252**0.5)), 4
         ),
-        "as_of": str(panel.index[-1].date()),
+        "as_of": _as_of(panel),
     }
 
 
@@ -88,7 +150,7 @@ def exposure() -> dict:
     table = sector_exposure(weights, sectors)
 
     return {
-        "as_of": str(panel.index[-1].date()),
+        "as_of": _as_of(panel),
         "summary": exposure_summary(weights),
         "sectors": table.to_dict("records") if not table.empty else [],
         "limits": {
@@ -105,14 +167,14 @@ def positions(limit: int = Query(default=50, le=300)) -> dict:
     report = position_sizing_report(weights, vols, _sectors())
 
     if report.empty:
-        return {"as_of": str(panel.index[-1].date()), "positions": []}
+        return {"as_of": _as_of(panel), "positions": []}
 
     report = report.head(limit).copy()
     for col in ("current_weight", "vol_adj_target", "volatility", "drift"):
         report[col] = report[col].round(6)
 
     return {
-        "as_of": str(panel.index[-1].date()),
+        "as_of": _as_of(panel),
         "n_positions": len(report),
         "positions": report.to_dict("records"),
     }
@@ -146,7 +208,7 @@ def breaches() -> dict:
         ]
 
     return {
-        "as_of": str(panel.index[-1].date()),
+        "as_of": _as_of(panel),
         "active_breaches": detected,
         "n_active": len(detected),
         "history": history,

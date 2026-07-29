@@ -190,7 +190,18 @@ def current_signals(top_n: int = 20, orientation: int = -1) -> pd.DataFrame:
 
     This is what the Live Signals panel displays: the ranking as of the most
     recent bar, which is genuinely the strategy's current view.
+
+    Served from the precomputed snapshot where one exists. Computing it needs
+    the whole price panel resident, and several screens call this on load, so
+    on a small instance the uncached path is what kills the process rather than
+    any single expensive endpoint.
     """
+    from quantedge.factors.snapshot import read_snapshot
+
+    stored = read_snapshot(limit=top_n)
+    if stored["rows"]:
+        return pd.DataFrame(stored["rows"])
+
     spec = DEFAULT_SPEC
     panel, _ = load_panel()
 

@@ -112,26 +112,22 @@ def _top_holdings(limit: int) -> dict:
     what was measured. Saying so matters: a control that looked like it
     re-scored the strategy would misrepresent the numbers above it.
     """
-    # Calls the strategy directly rather than the /portfolio/signals route,
-    # whose own limit caps at 100 -- this control goes to the full universe.
-    from sqlalchemy import func, select
-
-    from quantedge.db.models import OhlcvClean
-    from quantedge.strategy import current_signals
+    # Reads the precomputed snapshot rather than the strategy layer. Importing
+    # that chain pulls in the backtest engine and the factor stack, which costs
+    # ~90MB on top of an already-loaded app -- enough to matter on a small
+    # instance, and unnecessary when the ranking is already stored.
+    from quantedge.factors.snapshot import read_snapshot
 
     try:
-        df = current_signals(top_n=limit)
-        rows = df.to_dict("records") if not df.empty else []
-        # The signal frame is indexed by rank, not date, so the as-of comes
-        # from the data itself rather than the frame.
-        with session_scope() as s:
-            as_of = s.scalar(select(func.max(OhlcvClean.date)))
+        stored = read_snapshot(limit=limit)
+        rows = stored["rows"]
+        as_of = stored["as_of"]
     except Exception as exc:  # pragma: no cover - ranking is supplementary
         log.warning("analyst.holdings_unavailable %s", exc)
         return {"as_of": None, "rows": [], "note": "Ranking unavailable."}
 
     return {
-        "as_of": str(as_of) if as_of else None,
+        "as_of": as_of,
         "rows": rows[:limit],
         "note": (
             "Current factor ranking, shown to the selected depth. The strategy "

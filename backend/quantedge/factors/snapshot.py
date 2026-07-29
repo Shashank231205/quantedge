@@ -92,6 +92,41 @@ def build_snapshot(top_n: int = 600) -> dict:
         if kept:
             s.execute(delete(FactorSnapshot).where(FactorSnapshot.as_of.notin_(kept)))
 
+    # The Risk screen needs the live book's weights and per-name volatility.
+    # Deriving them here costs nothing extra -- the panel is already loaded --
+    # and saves the API from running a full backtest per request.
+    try:
+        from quantedge.backtest.vectorized import VectorizedBacktestEngine
+        from quantedge.risk.position_sizing import realized_volatility
+
+        engine = VectorizedBacktestEngine(
+            config=DEFAULT_SPEC.portfolio_config(), cost_model=DEFAULT_SPEC.cost_model()
+        )
+        result = engine.run(panel, blended)
+        weights = result.weights.iloc[-1]
+        vols = realized_volatility(panel, window=60).iloc[-1]
+
+        store_diagnostic(
+            "live_book",
+            {
+                "as_of": str(as_of),
+                "weights": {
+                    str(k): round(float(v), 6)
+                    for k, v in weights.items()
+                    if abs(float(v)) > 1e-9
+                },
+                "volatility": {
+                    str(k): round(float(v), 6)
+                    for k, v in vols.items()
+                    if pd.notna(v)
+                },
+            },
+            as_of=as_of,
+        )
+        log.info("factors.live_book_written positions=%s", int((weights.abs() > 1e-9).sum()))
+    except Exception:  # pragma: no cover - risk view degrades, snapshot stands
+        log.warning("factors.live_book_failed", exc_info=True)
+
     log.info("factors.snapshot_written as_of=%s rows=%s", as_of, len(rows))
     return {"rows": len(rows), "as_of": str(as_of)}
 
