@@ -127,6 +127,48 @@ def build_snapshot(top_n: int = 600) -> dict:
     except Exception:  # pragma: no cover - risk view degrades, snapshot stands
         log.warning("factors.live_book_failed", exc_info=True)
 
+    # Correlation and IC are the remaining panel-bound endpoints. Computing
+    # them here, while the panel is already resident, is what lets the Factor
+    # Explorer's lower panels load on an instance that cannot hold the panel.
+    try:
+        from quantedge.factors.diagnostics import cross_factor_correlation, ic_decay
+
+        matrix = cross_factor_correlation(components)
+        store_diagnostic(
+            "correlation",
+            {
+                "factors": list(matrix.columns),
+                "matrix": matrix.round(4).to_dict(),
+                "note": "Spearman rank correlation, averaged across dates.",
+            },
+            as_of=as_of,
+        )
+
+        horizons = (1, 5, 10, 21, 42, 63)
+        by_factor = {
+            name: ic_decay(sig, panel, horizons=horizons, factor=name).to_dict("records")
+            for name, sig in components.items()
+        }
+        by_factor["composite"] = ic_decay(
+            blended, panel, horizons=horizons, factor="composite"
+        ).to_dict("records")
+        store_diagnostic(
+            "ic",
+            {
+                "horizons": list(horizons),
+                "ic_by_factor": by_factor,
+                "note": (
+                    "Spearman IC of the one-bar-lagged signal against forward "
+                    "returns. A mean IC of 0.02-0.05 is typical for a daily "
+                    "equity factor."
+                ),
+            },
+            as_of=as_of,
+        )
+        log.info("factors.diagnostics_written factors=%s", len(by_factor))
+    except Exception:  # pragma: no cover - diagnostics are supplementary
+        log.warning("factors.diagnostics_failed", exc_info=True)
+
     log.info("factors.snapshot_written as_of=%s rows=%s", as_of, len(rows))
     return {"rows": len(rows), "as_of": str(as_of)}
 

@@ -168,6 +168,14 @@ def correlation_matrix() -> dict:
     if cached is not None:
         return cached
 
+    # Prefer the stored diagnostic; computing it needs the whole panel.
+    from quantedge.factors.snapshot import read_diagnostic
+
+    stored = read_diagnostic("correlation")
+    if stored:
+        cache.set("factor_correlation", stored)
+        return stored
+
     _, components, _ = _signals()
     matrix = cross_factor_correlation(components)
 
@@ -189,6 +197,13 @@ def factor_ic(
     cached = cache.get(key)
     if cached is not None:
         return cached
+
+    from quantedge.factors.snapshot import read_diagnostic
+
+    stored = read_diagnostic("ic")
+    if stored:
+        cache.set(key, stored)
+        return stored
 
     panel, components, blended = _signals()
     try:
