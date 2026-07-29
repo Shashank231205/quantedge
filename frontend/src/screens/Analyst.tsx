@@ -190,7 +190,16 @@ function MetricCard({ metric }: { metric: AnalystMetric }) {
 
         <div>
           <Label>Gaps</Label>
-          <p className="mt-1 text-xs leading-relaxed text-ink-dim">{metric.gaps}</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-dim">
+            {metric.gaps}
+            {metric.gap_citations.map((c, i) => (
+              <Citation
+                key={c.title}
+                citation={c}
+                index={metric.citations.length + i + 1}
+              />
+            ))}
+          </p>
         </div>
       </div>
     </Panel>

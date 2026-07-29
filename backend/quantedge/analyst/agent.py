@@ -18,7 +18,13 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from quantedge.analyst import providers
-from quantedge.analyst.rubric import Citation, MetricScore, overall_score, score_all
+from quantedge.analyst.rubric import (
+    Citation,
+    MetricScore,
+    gap_citation,
+    overall_score,
+    score_all,
+)
 from quantedge.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -112,6 +118,7 @@ class MetricReport:
     reasons: str
     gaps: str
     citations: list[dict]
+    gap_citations: list[dict]
 
 
 @dataclass
@@ -272,6 +279,7 @@ def generate_report(
                 reasons=(written.get("reasons") or reasons).strip(),
                 gaps=(written.get("gaps") or gaps).strip(),
                 citations=[asdict(c) for c in s.citations],
+                gap_citations=[asdict(c) for c in gap_citation(s)],
             )
         )
 

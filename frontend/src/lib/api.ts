@@ -495,6 +495,7 @@ export interface AnalystMetric {
   reasons: string
   gaps: string
   citations: AnalystCitation[]
+  gap_citations: AnalystCitation[]
 }
 
 export interface AnalystHoldings {

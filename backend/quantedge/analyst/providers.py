@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -28,6 +29,36 @@ log = get_logger(__name__)
 
 class ProviderError(RuntimeError):
     """Raised when a provider cannot answer, so the chain moves to the next."""
+
+    def __init__(self, message: str, *, rate_limited: bool = False) -> None:
+        super().__init__(message)
+        self.rate_limited = rate_limited
+
+
+#: Providers that returned 429, and when they may be tried again. A key whose
+#: daily quota is spent will fail every request until it resets, so retrying it
+#: costs a round trip and buys nothing -- on a measured chain that penalty was
+#: ~0.7s on every single report.
+_cooldown: dict[str, float] = {}
+
+
+def _in_cooldown(name: str) -> bool:
+    until = _cooldown.get(name)
+    if until is None:
+        return False
+    if time.monotonic() >= until:
+        _cooldown.pop(name, None)
+        return False
+    return True
+
+
+def _mark_rate_limited(name: str) -> None:
+    _cooldown[name] = time.monotonic() + settings.analyst_cooldown_seconds
+    log.warning(
+        "analyst.cooldown provider=%s seconds=%s",
+        name,
+        settings.analyst_cooldown_seconds,
+    )
 
 
 @dataclass
@@ -98,7 +129,10 @@ class GeminiProvider:
             parts = payload["candidates"][0]["content"]["parts"]
             return Completion(parts[0]["text"], self.name, self.model)
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-            raise ProviderError(f"{self.name}: {exc}") from exc
+            limited = isinstance(
+                exc, httpx.HTTPStatusError
+            ) and exc.response.status_code == 429
+            raise ProviderError(f"{self.name}: {exc}", rate_limited=limited) from exc
 
 
 class Gemini2Provider(GeminiProvider):
@@ -157,7 +191,10 @@ class _OpenAICompatProvider:
                 payload["choices"][0]["message"]["content"], self.name, self.model
             )
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-            raise ProviderError(f"{self.name}: {exc}") from exc
+            limited = isinstance(
+                exc, httpx.HTTPStatusError
+            ) and exc.response.status_code == 429
+            raise ProviderError(f"{self.name}: {exc}", rate_limited=limited) from exc
 
 
 class GroqProvider(_OpenAICompatProvider):
@@ -237,7 +274,7 @@ def complete(system: str, user: str) -> Completion:
     """
     errors: list[str] = []
     for provider in resolve_chain():
-        if not provider.available():
+        if not provider.available() or _in_cooldown(provider.name):
             continue
         if isinstance(provider, TemplateProvider):
             if errors:
@@ -248,6 +285,8 @@ def complete(system: str, user: str) -> Completion:
             log.info("analyst.completed provider=%s model=%s", completion.provider, completion.model)
             return completion
         except ProviderError as exc:
+            if exc.rate_limited:
+                _mark_rate_limited(provider.name)
             errors.append(str(exc))
             log.warning("analyst.provider_failed %s", exc)
 
@@ -258,7 +297,7 @@ def complete(system: str, user: str) -> Completion:
 def active_provider_name() -> str:
     """What the next report would use -- surfaced in the UI, not guessed at."""
     for provider in resolve_chain():
-        if provider.available():
+        if provider.available() and not _in_cooldown(provider.name):
             return provider.name
     return "template"
 

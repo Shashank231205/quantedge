@@ -92,13 +92,21 @@ class Settings(BaseSettings):
     # Providers are tried in order and the first one holding a key wins. With
     # no keys at all the report still renders from templates, which is why a
     # deployment without credentials degrades rather than breaks.
+    # Groq leads on latency: measured at ~0.7s against ~2.2s for Gemini on the
+    # same prompt, and a full report is the difference between a wait and a
+    # pause. Gemini stays in the chain for its larger free quota and as the
+    # multimodal path, and OpenRouter behind it for breadth.
     analyst_providers: list[str] = [
+        "groq",
         "gemini",
         "gemini2",
-        "groq",
         "openrouter",
         "template",
     ]
+    #: How long a provider that returned 429 is skipped before being retried.
+    #: Without this every request pays a guaranteed-failing round trip to an
+    #: exhausted key before reaching one that works.
+    analyst_cooldown_seconds: float = 900.0
     gemini_api_key: str | None = None
     # A second Gemini key on a different Google project is a second free-tier
     # quota, not just a spare credential: when the first key exhausts its daily

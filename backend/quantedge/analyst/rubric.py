@@ -13,6 +13,7 @@ convention -- deflated Sharpe -- the rule is used and the convention ignored.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +44,61 @@ class MetricScore:
     # Facts the agent must build its prose from. Not prose itself -- the agent
     # turns these into reasons/gaps. Anything not in here is not licensed.
     evidence: dict[str, Any] = field(default_factory=dict)
+    # How this metric is scored: the value, the two ends of its scale, and the
+    # unit they are expressed in. `gap_citation` turns this into the citation
+    # that sits beside the gaps text, so the shortfall is derived from the same
+    # numbers that produced the score rather than described separately.
+    scale: ScaleSpec | None = None
+
+
+@dataclass
+class ScaleSpec:
+    """The scoring scale for one metric, in that metric's own units."""
+
+    unit: str
+    #: Value that scores 0, and value that scores 100.
+    floor: float
+    ceiling: float
+    #: Rendered form of a raw value, e.g. percentages vs plain ratios.
+    fmt: Callable[[float], str] = lambda v: f"{v:g}"
+    #: Extra shortfalls specific to this metric, as (label, detail) pairs
+    #: assembled by the scorer from its own evidence.
+    penalties: list[tuple[str, str]] = field(default_factory=list)
+
+
+def gap_citation(metric: MetricScore) -> list[Citation]:
+    """Build the citation that backs a metric's gaps text.
+
+    Derived entirely from the metric's scale and evidence, so each one carries
+    that metric's own numbers -- a gap is a claim about a shortfall, and it
+    should cite the threshold it fell short of rather than reuse the figures
+    that justified the score.
+    """
+    spec = metric.scale
+    if spec is None or metric.value is None:
+        return []
+
+    fmt = spec.fmt
+    distance = abs(spec.ceiling - metric.value)
+    points = [
+        f"Scored {metric.score}/100 on a scale where "
+        f"{fmt(spec.floor)} scores 0 and {fmt(spec.ceiling)} scores 100",
+        f"Observed: {fmt(metric.value)}",
+        f"Distance to a full score: {fmt(distance)} of {spec.unit}",
+    ]
+    points.extend(f"{label}: {detail}" for label, detail in spec.penalties)
+
+    return [
+        Citation(
+            title=f"{metric.label} — scoring basis",
+            description=(
+                f"What the {metric.score}/100 is measured against, and the "
+                f"specific shortfalls that keep it below 100."
+            ),
+            points=points,
+            source=metric.citations[0].source if metric.citations else "Rubric",
+        )
+    ]
 
 
 def _band(score: int) -> str:
@@ -105,6 +161,20 @@ def score_risk_adjusted(m: dict) -> MetricScore:
                 (ra.get("sortino_ratio") or 0) > sharpe
             ),
         },
+        scale=ScaleSpec(
+            unit="Sharpe",
+            floor=0.0,
+            ceiling=2.0,
+            fmt=lambda v: f"{v:.4g}",
+            penalties=[
+                (
+                    "Ceiling rationale",
+                    "a Sharpe above 2.0 on six years of daily equity data is "
+                    "more often a leverage artefact than an edge, so the scale "
+                    "stops there",
+                )
+            ],
+        ),
     )
 
 
@@ -177,6 +247,29 @@ def score_statistical_significance(m: dict) -> MetricScore:
                 (ds.get("observed_sharpe") or 0) > (ds.get("expected_max_sharpe") or 0)
             ),
         },
+        scale=ScaleSpec(
+            unit="deflated Sharpe",
+            floor=0.0,
+            ceiling=0.95,
+            fmt=lambda v: f"{v:.4g}",
+            penalties=(
+                []
+                if is_significant
+                else [
+                    (
+                        "Selection penalty",
+                        f"{ds.get('n_trials')} trials raise the best-by-chance "
+                        f"Sharpe to {ds.get('expected_max_sharpe')}, against an "
+                        f"observed {ds.get('observed_sharpe')}",
+                    ),
+                    (
+                        "Score cap",
+                        "held below 60 while the result fails the 0.95 bar, "
+                        "regardless of headline performance",
+                    ),
+                ]
+            ),
+        ),
     )
 
 
@@ -223,6 +316,29 @@ def score_drawdown(m: dict) -> MetricScore:
             "breached_circuit_breaker": depth >= 0.20,
             "scale": "-40% scores 0; -5% or shallower scores 100",
         },
+        scale=ScaleSpec(
+            unit="drawdown depth",
+            floor=-0.40,
+            ceiling=-0.05,
+            fmt=lambda v: f"{v:.2%}",
+            penalties=[
+                p
+                for p in [
+                    (
+                        "Circuit breaker",
+                        f"depth of {depth:.2%} reached the configured 20% limit",
+                    )
+                    if depth >= 0.20
+                    else None,
+                    (
+                        "Recovery",
+                        f"{r.get('max_drawdown_duration_days')} days to recover, "
+                        f"{r.get('time_underwater_pct')}% of days below a prior peak",
+                    ),
+                ]
+                if p
+            ],
+        ),
     )
 
 
@@ -277,6 +393,29 @@ def score_return_distribution(m: dict) -> MetricScore:
                 "fat_tails": 10 if kurt > 1.0 else 0,
             },
         },
+        scale=ScaleSpec(
+            unit="annualised volatility",
+            floor=0.40,
+            ceiling=0.10,
+            fmt=lambda v: f"{v:.2%}",
+            penalties=[
+                p
+                for p in [
+                    (
+                        "Target overshoot",
+                        f"{vol:.2%} realised against a 10% target, "
+                        f"{round(vol / 0.10, 2)}x",
+                    ),
+                    ("Negative skew", f"skew {skew} cost 10 points")
+                    if skew < 0
+                    else None,
+                    ("Fat tails", f"excess kurtosis {kurt} cost 10 points")
+                    if kurt > 1.0
+                    else None,
+                ]
+                if p
+            ],
+        ),
     )
 
 
@@ -325,6 +464,19 @@ def score_benchmark(m: dict) -> MetricScore:
                 > (br.get("benchmark_sharpe") or 0)
             ),
         },
+        scale=ScaleSpec(
+            unit="information ratio",
+            floor=0.0,
+            ceiling=1.0,
+            fmt=lambda v: f"{v:.4g}",
+            penalties=[
+                (
+                    "Cost of the excess return",
+                    f"{br.get('tracking_error', 0):.2%} tracking error carried "
+                    f"to earn {br.get('excess_return', 0):.2%} over SPY",
+                )
+            ],
+        ),
     )
 
 
@@ -376,6 +528,35 @@ def score_trade_quality(m: dict) -> MetricScore:
             ),
             "sample_adequate": (t.get("n_trades") or 0) >= 100,
         },
+        scale=ScaleSpec(
+            unit="profit factor",
+            floor=1.0,
+            ceiling=2.5,
+            fmt=lambda v: f"{v:.4g}",
+            penalties=[
+                p
+                for p in [
+                    (
+                        "Edge composition",
+                        f"win rate {t.get('win_rate', 0):.2%} with payoff ratio "
+                        f"{t.get('payoff_ratio')} — the edge rests on "
+                        + (
+                            "payoff size"
+                            if (t.get("payoff_ratio") or 0) > 1.2
+                            else "win frequency"
+                        ),
+                    ),
+                    (
+                        "Sample size",
+                        f"{t.get('n_trades')} trades is below the 100 needed to "
+                        "be conclusive",
+                    )
+                    if (t.get("n_trades") or 0) < 100
+                    else None,
+                ]
+                if p
+            ],
+        ),
     )
 
 
@@ -422,6 +603,24 @@ def score_cost_resilience(m: dict) -> MetricScore:
             "modelled_cost_bps_per_side": 6,
             "costs_already_in_returns": True,
         },
+        scale=ScaleSpec(
+            unit="annual turnover",
+            floor=30.0,
+            ceiling=2.0,
+            fmt=lambda v: f"{v:.1f}x",
+            penalties=[
+                (
+                    "Implied drag",
+                    f"{annual:.1f}x turnover at 6bp per side costs "
+                    f"{cost_drag:.2%} of annual return",
+                ),
+                (
+                    "Rebalance load",
+                    f"{tn.get('n_rebalances')} rebalances averaging "
+                    f"{tn.get('avg_rebalance_turnover', 0):.2%} of the book",
+                ),
+            ],
+        ),
     )
 
 
