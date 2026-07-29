@@ -9,7 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from quantedge.api.middleware import LatencyMiddleware, flush_on_shutdown
-from quantedge.api.routers import analyst, backtest, factors, portfolio, risk, system
+from quantedge.api.routers import (
+    analyst,
+    backtest,
+    factors,
+    inu,
+    portfolio,
+    risk,
+    system,
+)
 from quantedge.api.ws import router as ws_router
 from quantedge.config import settings
 from quantedge.logging_config import configure_logging, get_logger
@@ -75,6 +83,7 @@ for r in (
     risk.router,
     system.router,
     analyst.router,
+    inu.router,
 ):
     app.include_router(r, prefix=settings.api_prefix)
 

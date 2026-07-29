@@ -107,6 +107,13 @@ class Settings(BaseSettings):
     #: Without this every request pays a guaranteed-failing round trip to an
     #: exhausted key before reaching one that works.
     analyst_cooldown_seconds: float = 900.0
+
+    # --- INU AI chat --------------------------------------------------------
+    #: Chat turns must feel immediate, so the ceiling is far tighter than the
+    #: analyst's -- a model that has not answered in 45s should be abandoned
+    #: for the next one in the chain rather than waited on.
+    inu_timeout_seconds: float = 45.0
+    inu_history_turns: int = 12
     gemini_api_key: str | None = None
     # A second Gemini key on a different Google project is a second free-tier
     # quota, not just a spare credential: when the first key exhausts its daily

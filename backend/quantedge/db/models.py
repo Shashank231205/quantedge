@@ -318,3 +318,48 @@ class RiskEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
     )
+
+
+class Conversation(Base):
+    """One INU AI chat thread, listed in the history sidebar."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Derived from the opening question rather than asked for, so a thread is
+    # identifiable in the sidebar without the user naming it.
+    title: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), index=True
+    )
+
+
+class ChatMessage(Base):
+    """A single turn. Assistant rows also record how the answer was produced.
+
+    Keeping the model, provider and tool list per message means a reader can
+    see which free model answered and what platform data it consulted --
+    the same provenance the rest of the app exposes.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(String(80))
+    provider: Mapped[str | None] = mapped_column(String(32))
+    tools_used: Mapped[dict | None] = mapped_column(JSON)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    #: Set when the turn carried an attachment, so the thread can be replayed
+    #: with its context intact.
+    attachment_name: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )

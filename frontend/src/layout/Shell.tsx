@@ -16,6 +16,7 @@ const NAV = [
   { to: '/risk', label: 'Risk', icon: '◉' },
   { to: '/pipeline', label: 'Pipeline', icon: '⛁' },
   { to: '/analyst', label: 'Analyst', icon: '☝' },
+  { to: '/inu', label: 'INU AI', icon: '◆' },
 ]
 
 function KpiHeader() {

@@ -100,6 +100,41 @@ export const api = {
     return request<AnalystReport>(`/v1/analyst/report?${q}`)
   },
 
+  // --- INU AI ----------------------------------------------------------------
+  inuStatus: () => request<InuStatus>('/v1/inu/status'),
+  inuChat: (message: string, conversationId?: number | null) =>
+    request<InuReply>('/v1/inu/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, conversation_id: conversationId ?? null }),
+    }),
+  inuUpload: async (file: File, message: string, conversationId?: number | null) => {
+    // Multipart, so the JSON Content-Type the shared client sets must be
+    // omitted — the browser supplies its own boundary.
+    const form = new FormData()
+    form.append('file', file)
+    form.append('message', message)
+    if (conversationId) form.append('conversation_id', String(conversationId))
+    const res = await fetch(`${BASE}/v1/inu/chat/upload`, {
+      method: 'POST',
+      headers: { 'X-API-Key': API_KEY },
+      body: form,
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try {
+        detail = (await res.json()).detail ?? detail
+      } catch {
+        /* not JSON */
+      }
+      throw new ApiError(res.status, detail)
+    }
+    return (await res.json()) as InuReply
+  },
+  inuConversations: () => request<{ conversations: InuConversation[] }>('/v1/inu/conversations'),
+  inuConversation: (id: number) => request<InuThread>(`/v1/inu/conversations/${id}`),
+  inuDelete: (id: number) =>
+    request<{ deleted: number }>(`/v1/inu/conversations/${id}`, { method: 'DELETE' }),
+
   // --- System Health ---------------------------------------------------------
   systemStatus: () => request<SystemStatus>('/v1/system/status'),
   systemJobs: () => request<JobsResponse>('/v1/system/jobs'),
@@ -524,6 +559,58 @@ export interface AnalystReport {
   notes: string[]
   cached: boolean
   holdings?: AnalystHoldings
+}
+
+export interface InuReply {
+  conversation_id: number
+  content: string
+  model: string
+  provider: string
+  tools_used: string[]
+  latency_ms: number
+  fell_back: boolean
+  attachment?: string
+}
+
+export interface InuConversation {
+  id: number
+  title: string
+  created_at: string | null
+  updated_at: string | null
+  n_messages: number
+}
+
+export interface InuMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  model: string | null
+  provider: string | null
+  tools_used: string[]
+  latency_ms: number | null
+  attachment_name: string | null
+  created_at: string | null
+}
+
+export interface InuThread {
+  id: number
+  title: string
+  messages: InuMessage[]
+}
+
+export interface InuStatus {
+  models: {
+    id: string
+    provider: string
+    context: number
+    tpm: number | null
+    rpd: number | null
+    notes: string
+    good_for: string[]
+  }[]
+  tools: { name: string; description: string }[]
+  capabilities: Record<string, string>
+  note: string
 }
 
 export interface SystemInfo {
