@@ -36,6 +36,9 @@ python -m quantedge.cli ingest
 step "Computing factors and IC diagnostics"
 python -m quantedge.cli factors
 
+step "Precomputing factor snapshot"
+python -m quantedge.cli snapshot
+
 step "Running walk-forward backtest"
 python -m quantedge.cli backtest
 

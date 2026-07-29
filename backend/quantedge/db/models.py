@@ -363,3 +363,45 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
     )
+
+
+class FactorSnapshot(Base):
+    """Precomputed factor scores, one row per ticker per as-of date.
+
+    Computing the composite requires the whole 838k-row price panel in memory,
+    which peaks near 270MB on top of a ~240MB library baseline -- more than a
+    512MB instance can hold. The pipeline writes the result here once, and the
+    API serves rows.
+
+    This is also simply the right shape: recomputing six years of factors on
+    every page view was work the data had already done.
+    """
+
+    __tablename__ = "factor_snapshots"
+    __table_args__ = (
+        UniqueConstraint("as_of", "ticker", name="uq_factor_snapshot"),
+        Index("ix_factor_snapshot_as_of", "as_of", "composite_score"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    as_of: Mapped[date] = mapped_column(Date, index=True)
+    ticker: Mapped[str] = mapped_column(String(16), index=True)
+    composite_score: Mapped[float] = mapped_column(Float)
+    #: Per-factor ranks, keyed by factor name. Stored as JSON so adding a
+    #: factor does not require a migration.
+    components: Mapped[dict | None] = mapped_column(JSON)
+    bias: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class FactorDiagnostic(Base):
+    """IC, decay and cross-factor correlation, computed once by the pipeline."""
+
+    __tablename__ = "factor_diagnostics"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    as_of: Mapped[date] = mapped_column(Date, index=True)
+    #: What this row holds: "ic", "correlation", or "ticker_detail".
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -100,6 +100,19 @@ def factors(
 
 
 @app.command()
+def snapshot() -> None:
+    """Precompute factor scores into the database.
+
+    The API serves these rows rather than rebuilding the panel per request,
+    which is what lets a small instance run the Factor Explorer at all.
+    """
+    _setup()
+    from quantedge.factors.snapshot import build_snapshot
+
+    typer.echo(json.dumps(build_snapshot(), indent=2, default=str))
+
+
+@app.command()
 def backtest(
     walk_forward: bool = typer.Option(True, help="Walk-forward validate (recommended)"),
     save: bool = typer.Option(True, help="Persist the run to the database"),

@@ -58,6 +58,9 @@ $PY -m quantedge.cli ingest
 step "Computing factors and IC diagnostics"
 $PY -m quantedge.cli factors
 
+step "Precomputing factor snapshot"
+$PY -m quantedge.cli snapshot
+
 step "Running walk-forward backtest"
 $PY -m quantedge.cli backtest
 

@@ -73,7 +73,49 @@ def factor_table(
     descending: bool = True,
     search: str | None = None,
 ) -> dict:
-    """Sortable per-ticker factor ranks as of the latest bar."""
+    """Sortable per-ticker factor ranks as of the latest bar.
+
+    Served from the precomputed snapshot when one exists. Computing this live
+    needs the whole price panel resident (~270MB on top of a ~240MB library
+    baseline), which a small instance cannot hold -- and the ranking for a
+    given date does not change, so recomputing it per request was wasted work
+    even where the memory was available.
+    """
+    from quantedge.factors.snapshot import read_snapshot
+
+    stored = read_snapshot(limit=600)
+    if stored["rows"]:
+        sectors = _sector_map()
+        rows = [
+            {
+                "ticker": r["ticker"],
+                "sector": sectors.get(r["ticker"]),
+                "composite": r["composite_score"],
+                **{k: v for k, v in r.items() if k.endswith("_rank")},
+            }
+            for r in stored["rows"]
+            if not search or search.upper() in r["ticker"].upper()
+        ]
+        rows.sort(
+            key=lambda r: r.get(
+                "composite" if sort_by == "composite" else sort_by, 0
+            )
+            or 0,
+            reverse=descending,
+        )
+        factor_names = sorted(
+            {k[:-5] for r in stored["rows"] for k in r if k.endswith("_rank")}
+        )
+        return {
+            "as_of": stored["as_of"],
+            "n_total": len(rows),
+            "universe_size": len(stored["rows"]),
+            "factors": factor_names,
+            "rows": rows[:limit],
+            "source": "precomputed",
+        }
+
+    # No snapshot yet -- fall back to computing, which is correct but heavy.
     panel, components, blended = _signals()
     sectors = _sector_map()
 
