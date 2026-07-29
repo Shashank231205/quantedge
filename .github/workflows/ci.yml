@@ -17,8 +17,11 @@ jobs:
           POSTGRES_PASSWORD: quantedge
           POSTGRES_DB: quantedge
         ports: ["5432:5432"]
+        # pg_isready defaults to the invoking OS user, which on the runner is
+        # root — a role this image never creates, so the probe fails forever
+        # and the job dies waiting. Name the role and database explicitly.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U quantedge -d quantedge"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -27,7 +30,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://quantedge:quantedge@localhost:5432/quantedge
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
@@ -57,10 +60,10 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
