@@ -56,12 +56,19 @@ def _key(setting_value: str | None, env_name: str) -> str | None:
 
 
 class GeminiProvider:
-    """Google AI Studio. Free tier is rate-limited rather than credit-limited."""
+    """Google AI Studio. Free tier is rate-limited rather than credit-limited.
+
+    A 429 here means the day's quota is spent, not that the key is bad, so it
+    is raised like any other failure and the chain moves on to the next key or
+    provider.
+    """
 
     name = "gemini"
+    _setting = "gemini_api_key"
+    _env = "GEMINI_API_KEY"
 
     def __init__(self) -> None:
-        self.api_key = _key(settings.gemini_api_key, "GEMINI_API_KEY")
+        self.api_key = _key(getattr(settings, self._setting), self._env)
         self.model = settings.gemini_model
 
     def available(self) -> bool:
@@ -91,7 +98,15 @@ class GeminiProvider:
             parts = payload["candidates"][0]["content"]["parts"]
             return Completion(parts[0]["text"], self.name, self.model)
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-            raise ProviderError(f"gemini: {exc}") from exc
+            raise ProviderError(f"{self.name}: {exc}") from exc
+
+
+class Gemini2Provider(GeminiProvider):
+    """The second Gemini key, on a separate Google project and quota."""
+
+    name = "gemini2"
+    _setting = "gemini_api_key_2"
+    _env = "GEMINI_API_KEY_2"
 
 
 class _OpenAICompatProvider:
@@ -177,6 +192,7 @@ class TemplateProvider:
 
 _REGISTRY = {
     "gemini": GeminiProvider,
+    "gemini2": Gemini2Provider,
     "groq": GroqProvider,
     "openrouter": OpenRouterProvider,
     "template": TemplateProvider,

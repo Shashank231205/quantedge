@@ -92,8 +92,18 @@ class Settings(BaseSettings):
     # Providers are tried in order and the first one holding a key wins. With
     # no keys at all the report still renders from templates, which is why a
     # deployment without credentials degrades rather than breaks.
-    analyst_providers: list[str] = ["gemini", "groq", "openrouter", "template"]
+    analyst_providers: list[str] = [
+        "gemini",
+        "gemini2",
+        "groq",
+        "openrouter",
+        "template",
+    ]
     gemini_api_key: str | None = None
+    # A second Gemini key on a different Google project is a second free-tier
+    # quota, not just a spare credential: when the first key exhausts its daily
+    # limit the chain moves to this one instead of degrading to templates.
+    gemini_api_key_2: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
