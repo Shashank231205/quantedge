@@ -278,7 +278,7 @@ it needs a real long-lived process, not a serverless function.
 
 | Component | Host | Config |
 |---|---|---|
-| Dashboard | Vercel | `vercel.json` |
+| Dashboard | Vercel | `frontend/vercel.json` |
 | API + PostgreSQL | Render | `render.yaml` |
 
 **1. Backend.** Point Render at this repo; the blueprint provisions PostgreSQL
@@ -326,9 +326,14 @@ only needs a `DATABASE_URL` and does not care where the database lives. Expect
 15-25 minutes in-container, a little longer remotely since every write crosses
 the network. Both are idempotent, so a failed step can simply be re-run.
 
-**3. Frontend.** Import the repo into Vercel — `vercel.json` already sets the
-build. Add `VITE_API_URL` (your Render URL) and `VITE_API_KEY` (the same
-`API_KEY`). Note that `VITE_*` values are inlined into the bundle at build time
+**3. Frontend.** Import the repo into Vercel and set **Root Directory** to
+`frontend`. That matters: Vercel scans the whole repo and will otherwise offer
+to deploy the FastAPI backend as a second service, which cannot work — the API
+holds a warm in-process cache and serves WebSockets, neither of which survives
+a serverless function. Pointing the project at `frontend/` leaves nothing to
+detect, and `frontend/vercel.json` supplies the rest of the build.
+
+Add `VITE_API_URL` (your Render URL) and `VITE_API_KEY` (the same `API_KEY`). Note that `VITE_*` values are inlined into the bundle at build time
 and are therefore public; the demo key is read-only by design, and nothing
 secret should ever be passed this way.
 
