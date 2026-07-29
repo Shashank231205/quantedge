@@ -41,6 +41,14 @@ services:
       - key: PYTHON_VERSION
         value: "3.11"
 
+      # The free instance has 512MB. Pre-warming the factor and risk caches
+      # loads the full 837k-row price panel twice over, which OOMs the process
+      # and puts it in a restart loop that reads as a crashing app rather than
+      # a memory ceiling. Off here; the first request to each screen pays a few
+      # seconds instead. Turn back on when the instance has room.
+      - key: WARM_CACHE_ON_STARTUP
+        value: "false"
+
       # Model providers for the Analyst and INU AI screens. All free tiers.
       #
       # `sync: false` means Render prompts for the value rather than reading it

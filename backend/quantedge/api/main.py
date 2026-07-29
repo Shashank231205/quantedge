@@ -34,13 +34,23 @@ async def lifespan(app: FastAPI):
     # seconds. Doing it on first request made that request a ~15s outlier that
     # dominated the p95 the System Health screen reports. Warm it in a worker
     # thread so startup stays non-blocking.
+    #
+    # Sequentially, though, and only where there is memory for it. Both warmers
+    # load the full price panel, so running them concurrently holds two copies
+    # of ~837k rows at once. That is invisible on a development machine and
+    # fatal on a 512MB instance, where it OOMs the process into a restart loop
+    # that looks like a crashing app rather than a memory ceiling.
     import asyncio
 
     async def warm() -> None:
-        await asyncio.gather(
-            asyncio.to_thread(factors.warm_cache),
-            asyncio.to_thread(risk.warm_cache),
-        )
+        if not settings.warm_cache_on_startup:
+            log.info("api.cache_warm_skipped reason=disabled")
+            return
+        for name, fn in (("factors", factors.warm_cache), ("risk", risk.warm_cache)):
+            try:
+                await asyncio.to_thread(fn)
+            except Exception:  # pragma: no cover - warming is best effort
+                log.warning("api.cache_warm_failed component=%s", name, exc_info=True)
         log.info("api.cache_warm")
 
     task = asyncio.create_task(warm())

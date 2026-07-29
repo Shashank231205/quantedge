@@ -114,6 +114,13 @@ class Settings(BaseSettings):
     #: for the next one in the chain rather than waited on.
     inu_timeout_seconds: float = 45.0
     inu_history_turns: int = 12
+
+    # --- Deployment sizing ---------------------------------------------------
+    #: Pre-building the factor and risk caches costs a full copy of the price
+    #: panel each. Worth it on a machine with headroom, fatal on a small
+    #: instance -- set WARM_CACHE_ON_STARTUP=false there and pay the first
+    #: request's latency instead of restarting under memory pressure.
+    warm_cache_on_startup: bool = True
     gemini_api_key: str | None = None
     # A second Gemini key on a different Google project is a second free-tier
     # quota, not just a spare credential: when the first key exhausts its daily
