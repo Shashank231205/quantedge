@@ -8,6 +8,7 @@ import Factors from './screens/Factors'
 import Backtest from './screens/Backtest'
 import Risk from './screens/Risk'
 import Pipeline from './screens/Pipeline'
+import Analyst from './screens/Analyst'
 import './styles.css'
 
 const router = createBrowserRouter([
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { path: 'backtest', element: <Backtest /> },
       { path: 'risk', element: <Risk /> },
       { path: 'pipeline', element: <Pipeline /> },
+      { path: 'analyst', element: <Analyst /> },
     ],
   },
 ])

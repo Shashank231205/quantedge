@@ -91,6 +91,15 @@ export const api = {
   riskBreaches: () => request<BreachesResponse>('/v1/risk/breaches'),
   riskLogs: (limit = 20) => request<LogsResponse>(`/v1/risk/logs?limit=${limit}`),
 
+  // --- Analyst ---------------------------------------------------------------
+  analystStatus: () => request<AnalystStatus>('/v1/analyst/status'),
+  analystReport: (params: { universeSize?: number; refresh?: boolean } = {}) => {
+    const q = new URLSearchParams()
+    q.set('universe_size', String(params.universeSize ?? 50))
+    if (params.refresh) q.set('refresh', 'true')
+    return request<AnalystReport>(`/v1/analyst/report?${q}`)
+  },
+
   // --- System Health ---------------------------------------------------------
   systemStatus: () => request<SystemStatus>('/v1/system/status'),
   systemJobs: () => request<JobsResponse>('/v1/system/jobs'),
@@ -459,6 +468,49 @@ export interface ApiMetrics {
   target_p95_ms: number
   meets_target: boolean | null
   by_endpoint: { endpoint: string; requests: number; mean_ms: number; max_ms: number }[]
+}
+
+export interface AnalystStatus {
+  active_provider: string
+  is_template: boolean
+  configured_chain: string[]
+  available: string[]
+  cache_ttl_seconds: number
+  note: string
+}
+
+export interface AnalystCitation {
+  title: string
+  description: string
+  points: string[]
+  source: string
+}
+
+export interface AnalystMetric {
+  key: string
+  label: string
+  score: number
+  band: 'STRONG' | 'ADEQUATE' | 'WEAK' | 'FAILING'
+  value: number | null
+  reasons: string
+  gaps: string
+  citations: AnalystCitation[]
+}
+
+export interface AnalystReport {
+  run_id: number
+  run_name: string
+  overall_score: number
+  verdict: string
+  summary: string
+  metrics: AnalystMetric[]
+  provider: string
+  model: string
+  generated_at: string
+  universe_size: number
+  is_template: boolean
+  notes: string[]
+  cached: boolean
 }
 
 export interface SystemInfo {

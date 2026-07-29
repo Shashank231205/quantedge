@@ -15,6 +15,7 @@ const NAV = [
   { to: '/backtest', label: 'Backtest', icon: '◱' },
   { to: '/risk', label: 'Risk', icon: '◉' },
   { to: '/pipeline', label: 'Pipeline', icon: '⛁' },
+  { to: '/analyst', label: 'Analyst', icon: '☝' },
 ]
 
 function KpiHeader() {
