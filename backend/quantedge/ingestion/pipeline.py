@@ -222,14 +222,59 @@ def ingest_incremental(lookback_days: int = 7) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def load_close_prices(
+    tickers: list[str] | None = None,
+    start: date | None = None,
+    end: date | None = None,
+) -> pd.DataFrame:
+    """Ticker, date and close only -- what building a price panel requires.
+
+    load_prices returns nine columns; six of them are discarded immediately by
+    every panel caller, and carrying them roughly doubles peak memory for no
+    benefit.
+    """
+    columns = (OhlcvClean.ticker, OhlcvClean.date, OhlcvClean.close)
+    with session_scope() as s:
+        stmt = select(*columns)
+        if tickers:
+            stmt = stmt.where(OhlcvClean.ticker.in_(tickers))
+        if start:
+            stmt = stmt.where(OhlcvClean.date >= start)
+        if end:
+            stmt = stmt.where(OhlcvClean.date <= end)
+        rows = s.execute(stmt.order_by(OhlcvClean.ticker, OhlcvClean.date)).all()
+
+    return pd.DataFrame(rows, columns=["ticker", "date", "close"])
+
+
 def load_prices(
     tickers: list[str] | None = None,
     start: date | None = None,
     end: date | None = None,
 ) -> pd.DataFrame:
-    """Read cleaned OHLCV back out as a long-format frame."""
+    """Read cleaned OHLCV back out as a long-format frame.
+
+    Selects columns rather than entities, and builds the frame from the raw
+    tuples the driver returns. Loading full ORM objects and then a dict per row
+    held two copies of every row plus per-instance overhead: measured at a
+    1.5GB peak for 838k rows, which is three times a 512MB instance and killed
+    the deployed API on the first Factor Explorer request.
+    """
+    columns = (
+        OhlcvClean.ticker,
+        OhlcvClean.date,
+        OhlcvClean.open,
+        OhlcvClean.high,
+        OhlcvClean.low,
+        OhlcvClean.close,
+        OhlcvClean.volume,
+        OhlcvClean.dollar_volume,
+        OhlcvClean.returns,
+    )
+    names = [c.key for c in columns]
+
     with session_scope() as s:
-        stmt = select(OhlcvClean)
+        stmt = select(*columns)
         if tickers:
             stmt = stmt.where(OhlcvClean.ticker.in_(tickers))
         if start:
@@ -237,23 +282,10 @@ def load_prices(
         if end:
             stmt = stmt.where(OhlcvClean.date <= end)
 
-        rows = s.scalars(stmt.order_by(OhlcvClean.ticker, OhlcvClean.date)).all()
-        return pd.DataFrame(
-            [
-                {
-                    "ticker": r.ticker,
-                    "date": r.date,
-                    "open": r.open,
-                    "high": r.high,
-                    "low": r.low,
-                    "close": r.close,
-                    "volume": r.volume,
-                    "dollar_volume": r.dollar_volume,
-                    "returns": r.returns,
-                }
-                for r in rows
-            ]
-        )
+        rows = s.execute(stmt.order_by(OhlcvClean.ticker, OhlcvClean.date)).all()
+
+    # `rows` is a list of lightweight Row tuples; pandas consumes them directly.
+    return pd.DataFrame(rows, columns=names)
 
 
 def coverage_stats() -> dict:

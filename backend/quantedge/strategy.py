@@ -36,7 +36,7 @@ from quantedge.backtest.walk_forward import WalkForwardConfig, WalkForwardValida
 from quantedge.config import settings
 from quantedge.factors.composite import CompositeFactor
 from quantedge.ingestion.cleaning import to_price_panel
-from quantedge.ingestion.pipeline import load_prices
+from quantedge.ingestion.pipeline import load_close_prices
 from quantedge.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -130,8 +130,14 @@ def score_builder(prices: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 
 def load_panel(exclude_benchmark: bool = True) -> tuple[pd.DataFrame, pd.Series | None]:
-    """Load the price panel and the benchmark return series."""
-    frame = load_prices()
+    """Load the price panel and the benchmark return series.
+
+    Reads only the three columns the panel needs rather than the whole OHLCV
+    frame. Loading all nine and discarding six cost roughly twice the memory
+    for the same result -- on a small instance that difference is the process
+    surviving or being killed.
+    """
+    frame = load_close_prices()
     panel = to_price_panel(frame, "close")
 
     benchmark = None
