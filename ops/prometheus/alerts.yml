@@ -1,0 +1,96 @@
+# Alert rules. Each one names a condition a person should act on, and the
+# threshold is set from the service's own targets (p95 < 200ms, daily data).
+
+groups:
+  - name: availability
+    rules:
+      - alert: ApiNoHealthyBackends
+        expr: haproxy_backend_active_servers{proxy="api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "No API replica is passing readiness checks; the service is down."
+
+      - alert: ApiReplicasBelowTarget
+        # A stopped replica drops out of DNS discovery entirely, so count the
+        # healthy ones rather than waiting for an `up == 0` that never comes.
+        expr: (count(up{job="api"} == 1) or vector(0)) < 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fewer than 2 API replicas are up: {{ $value }} running, no redundancy left."
+
+      - alert: DatabaseUnreachable
+        expr: max(quantedge_metrics_db_up) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API replicas cannot read the database."
+
+  - name: performance
+    rules:
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(quantedge_http_requests_total{status="5xx"}[5m]))
+            / sum(rate(quantedge_http_requests_total[5m])) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 2% of API requests are failing ({{ $value | humanizePercentage }})."
+
+      - alert: ApiLatencyAboveTarget
+        expr: |
+          histogram_quantile(0.95, sum by (le) (
+            rate(quantedge_http_request_duration_seconds_bucket{route!~"/metrics|/health.*"}[5m])
+          )) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency is {{ $value | humanizeDuration }}, above the 200ms target."
+
+  - name: pipeline
+    rules:
+      - alert: NoSchedulerLeader
+        expr: sum(quantedge_scheduler_is_leader) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Schedulers are running but none holds the leader lock; no jobs will fire."
+
+      - alert: SchedulerSplitBrain
+        expr: sum(quantedge_scheduler_is_leader) > 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} schedulers believe they are leader."
+
+      - alert: SchedulerNoStandby
+        expr: (count(up{job="scheduler"} == 1) or vector(0)) < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Only {{ $value }} scheduler running; a failure would stop the pipeline."
+
+      - alert: PipelineJobFailed
+        expr: increase(quantedge_job_runs_total{status="failed"}[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job {{ $labels.job }} failed in the last hour."
+
+      - alert: PriceDataStale
+        # Four days covers a weekend plus a market holiday.
+        expr: time() - max(quantedge_latest_price_date_timestamp_seconds) > 4 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Newest stored daily bar is {{ $value | humanizeDuration }} old."

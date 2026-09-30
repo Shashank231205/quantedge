@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from quantedge.db.models import JobRun
 from quantedge.db.session import session_scope
 from quantedge.logging_config import get_logger
+from quantedge.observability.metrics import observe_job
 
 log = get_logger(__name__)
 
@@ -66,6 +67,7 @@ def track_job(job_name: str) -> Generator[JobContext, None, None]:
                 run.rows_written = ctx.rows_written
                 run.tickers_processed = ctx.tickers_processed
                 run.details = ctx.details
+        observe_job(job_name, "failed", (finished - started).total_seconds())
         log.error("job.failed name=%s error=%s", job_name, exc)
         raise
     else:
@@ -81,6 +83,7 @@ def track_job(job_name: str) -> Generator[JobContext, None, None]:
                 run.bytes_processed = ctx.bytes_processed
                 run.tickers_processed = ctx.tickers_processed
                 run.details = ctx.details
+        observe_job(job_name, "success", duration / 1000.0)
         log.info(
             "job.success name=%s rows=%s tickers=%s duration_ms=%.0f",
             job_name,

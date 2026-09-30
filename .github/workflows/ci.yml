@@ -72,3 +72,43 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  # Every ops config is checked by the tool that will load it, so a typo fails
+  # here rather than at 3am when a container restarts with it.
+  ops-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compose file
+        run: docker compose --profile ha --profile monitoring config --quiet
+      - name: Prometheus config and alert rules
+        run: |
+          docker run --rm -v "$PWD/ops/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+      - name: Alertmanager config
+        run: |
+          docker run --rm -v "$PWD/ops/alertmanager:/cfg:ro" --entrypoint amtool \
+            prom/alertmanager:v0.28.1 check-config /cfg/alertmanager.yml
+      - name: HAProxy config
+        run: |
+          docker run --rm -v "$PWD/ops/haproxy:/usr/local/etc/haproxy:ro" \
+            haproxy:3.0-alpine haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
+      - name: Alloy config
+        run: |
+          docker run --rm -v "$PWD/ops/alloy:/cfg:ro" \
+            grafana/alloy:v1.10.0 fmt /cfg/config.alloy
+      - name: Grafana dashboard JSON
+        run: python -c "import json,sys; json.load(open('ops/grafana/dashboards/quantedge.json'))"
+
+  # Kills API replicas and the scheduler leader under load; fails if a single
+  # request is dropped or the standby does not take over within 30s.
+  failover:
+    runs-on: ubuntu-latest
+    needs: [backend, ops-config]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Failover drill
+        run: bash ops/failover_test.sh
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose --profile ha logs --tail 200
