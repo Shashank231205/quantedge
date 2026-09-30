@@ -60,7 +60,7 @@ class TestMeta:
     def test_root_lists_screen_endpoints(self, client):
         body = client.get("/").json()
         assert set(body["screens"]) == {
-            "dashboard", "factors", "backtest", "risk", "system"
+            "dashboard", "factors", "backtest", "risk", "system", "microstructure"
         }
 
     def test_openapi_schema_builds(self, client):
