@@ -19,6 +19,7 @@ app = typer.Typer(help="QUANTEDGE — equity research & signal backtesting", no_
 log = get_logger(__name__)
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
+MICRO_PUBLISHED = Path(__file__).resolve().parent / "microstructure" / "study.json"
 
 
 def _setup(verbose: bool = True) -> None:
@@ -298,15 +299,58 @@ def status() -> None:
     ))
 
 
+micro_app = typer.Typer(help="Order-book microstructure research on Binance futures data")
+app.add_typer(micro_app, name="micro")
+
+
+@micro_app.command("study")
+def micro_study(
+    symbols: str = typer.Option("ETHUSDT,BTCUSDT,SOLUSDT", help="Comma-separated symbols"),
+    start: str = typer.Option("2023-10-02", help="First day (YYYY-MM-DD)"),
+    end: str = typer.Option("2023-10-15", help="Last day, inclusive"),
+) -> None:
+    """Download L1 + trade archives, build 1s bars and run the full study.
+
+    Needs no database: the inputs are public archives and the output is a
+    results document, so the study reproduces anywhere Python runs.
+    """
+    _setup()
+    from datetime import date
+
+    from quantedge.config import settings
+    from quantedge.microstructure.pipeline import cross_asset_summary, run_study
+
+    raw_dir = Path(settings.cache_dir) / "binance"
+    bars_dir = Path(settings.processed_dir) / "micro"
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+
+    studies = {}
+    for symbol in (s.strip().upper() for s in symbols.split(",") if s.strip()):
+        typer.echo(f"\n{symbol}: {first} .. {last}")
+        studies[symbol] = run_study(symbol, first, last, raw_dir, bars_dir)
+
+    summary = cross_asset_summary(studies)
+    typer.echo("\n" + pd.DataFrame(summary).to_string(index=False))
+
+    payload = json.dumps({"cross_asset": summary, "symbols": studies}, indent=2, default=str)
+    path = RESULTS / "microstructure.json"
+    path.write_text(payload)
+    # The API image is built from backend/ alone, so it cannot see results/.
+    # A copy inside the package ships with it.
+    MICRO_PUBLISHED.write_text(payload)
+    typer.secho(f"\nSaved → {path}", fg=typer.colors.GREEN)
+
+
 @app.command()
 def schedule(
     ingest_hour: int = typer.Option(22, help="UTC hour for the daily ingest"),
+    ha: bool = typer.Option(False, help="Run jobs only while holding the leader lock"),
 ) -> None:
     """Run the scheduler in the foreground."""
     _setup()
     from quantedge.ingestion.scheduler import run_scheduler
 
-    run_scheduler(ingest_hour=ingest_hour)
+    run_scheduler(ingest_hour=ingest_hour, ha=ha)
 
 
 if __name__ == "__main__":

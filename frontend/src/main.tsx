@@ -10,6 +10,7 @@ import Risk from './screens/Risk'
 import Pipeline from './screens/Pipeline'
 import Analyst from './screens/Analyst'
 import Inu from './screens/Inu'
+import Microstructure from './screens/Microstructure'
 import './styles.css'
 
 const router = createBrowserRouter([
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: 'factors', element: <Factors /> },
       { path: 'backtest', element: <Backtest /> },
       { path: 'risk', element: <Risk /> },
+      { path: 'microstructure', element: <Microstructure /> },
       { path: 'pipeline', element: <Pipeline /> },
       { path: 'analyst', element: <Analyst /> },
       { path: 'inu', element: <Inu /> },
