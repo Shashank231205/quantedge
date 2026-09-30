@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import hmac
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -14,6 +15,7 @@ from quantedge.api.routers import (
     backtest,
     factors,
     inu,
+    microstructure,
     portfolio,
     risk,
     system,
@@ -21,8 +23,10 @@ from quantedge.api.routers import (
 from quantedge.api.ws import router as ws_router
 from quantedge.config import settings
 from quantedge.logging_config import configure_logging, get_logger
+from quantedge.observability.metrics import register_pipeline_collector, render_latest
 
 configure_logging()
+register_pipeline_collector()
 log = get_logger(__name__)
 
 
@@ -83,7 +87,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Response-Time-Ms"],
+    expose_headers=["X-Response-Time-Ms", "X-Request-ID"],
 )
 
 for r in (
@@ -94,6 +98,7 @@ for r in (
     system.router,
     analyst.router,
     inu.router,
+    microstructure.router,
 ):
     app.include_router(r, prefix=settings.api_prefix)
 
@@ -110,6 +115,38 @@ def health_probe() -> dict:
     return system.health()
 
 
+@app.get("/health/live", tags=["meta"])
+def liveness() -> dict:
+    """The process is up and serving. Deliberately touches nothing else.
+
+    An orchestrator restarts a container that fails this, so it must not fail
+    because a dependency is down: restarting every replica during a database
+    blip turns a partial outage into a total one.
+    """
+    return {"status": "alive", "instance": settings.instance_name}
+
+
+@app.get("/health/ready", tags=["meta"])
+def readiness(response: Response) -> dict:
+    """Whether this instance should receive traffic: 503 if the database is
+    unreachable, so the load balancer drains it instead of sending requests
+    that can only fail."""
+    body = system.health()
+    body["instance"] = settings.instance_name
+    if body["database"] != "connected":
+        response.status_code = 503
+    return body
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(authorization: str | None = Header(default=None)) -> Response:
+    """Prometheus exposition. Bearer-protected when METRICS_TOKEN is set."""
+    expected = f"Bearer {settings.metrics_token}"
+    if settings.metrics_token and not hmac.compare_digest(authorization or "", expected):
+        raise HTTPException(status_code=401, detail="Invalid metrics token")
+    return Response(render_latest(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
 @app.get("/", tags=["meta"])
 def root() -> dict:
     return {
@@ -124,6 +161,7 @@ def root() -> dict:
             "backtest": f"{settings.api_prefix}/backtest/metrics",
             "risk": f"{settings.api_prefix}/risk/summary",
             "system": f"{settings.api_prefix}/system/status",
+            "microstructure": f"{settings.api_prefix}/microstructure/summary",
         },
     }
 

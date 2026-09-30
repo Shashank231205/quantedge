@@ -1,3 +1,28 @@
+# Three ways to run the stack:
+#
+#   docker compose up                                  single API + UI (development)
+#   docker compose --profile ha up                     2 API replicas behind HAProxy
+#                                                      + 2 leader-elected schedulers
+#   docker compose --profile ha --profile monitoring up
+#                                                      ...plus Prometheus, Alertmanager,
+#                                                      Grafana, Loki and Alloy
+#
+# Ports: API 8000 (single) / 8080 (balanced), UI 5173, HAProxy stats 8404,
+# Prometheus 9090, Alertmanager 9093, Grafana 3000.
+
+x-backend: &backend
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: quantedge-backend:local
+  environment: &backend-env
+    DATABASE_URL: postgresql+psycopg://quantedge:quantedge@postgres:5432/quantedge
+    API_KEY: ${API_KEY:-quantedge-dev-key}
+    LOG_FORMAT: json
+    WARM_CACHE_ON_STARTUP: "false"
+  volumes:
+    - ./data:/data
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,20 +42,17 @@ services:
       retries: 10
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend
     container_name: quantedge-api
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://quantedge:quantedge@postgres:5432/quantedge
-      API_KEY: ${API_KEY:-quantedge-dev-key}
+      <<: *backend-env
+      LOG_FORMAT: text
+      WARM_CACHE_ON_STARTUP: "true"
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/data
     command: >
       sh -c "alembic upgrade head &&
              uvicorn quantedge.api.main:app --host 0.0.0.0 --port 8000"
@@ -47,5 +69,125 @@ services:
     environment:
       VITE_API_URL: http://localhost:8000
 
+  # --- High availability -------------------------------------------------------
+
+  # Migrations run once, before any replica starts. Two replicas each running
+  # `alembic upgrade` at boot would race on the version table.
+  migrate:
+    <<: *backend
+    profiles: ["ha"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: alembic upgrade head
+    restart: "no"
+
+  api:
+    <<: *backend
+    profiles: ["ha"]
+    deploy:
+      replicas: 2
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # SIGTERM lets in-flight requests finish before the replica exits; the
+    # balancer has already stopped routing to it by then.
+    command: >
+      uvicorn quantedge.api.main:app --host 0.0.0.0 --port 8000
+      --timeout-graceful-shutdown 10
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  lb:
+    image: haproxy:3.0-alpine
+    profiles: ["ha"]
+    container_name: quantedge-lb
+    depends_on:
+      - api
+    ports:
+      - "8080:8080"
+      - "8404:8404"
+    volumes:
+      - ./ops/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  scheduler:
+    <<: *backend
+    profiles: ["ha"]
+    deploy:
+      replicas: 2
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *backend-env
+      LEADER_RETRY_SECONDS: "2"
+    command: python -m quantedge.cli schedule --ha
+    # The image's healthcheck probes the API port; a scheduler serves only
+    # its metrics endpoint.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9101/metrics"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # --- Monitoring ----------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    container_name: quantedge-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./ops/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["monitoring"]
+    container_name: quantedge-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+  loki:
+    image: grafana/loki:3.5.0
+    profiles: ["monitoring"]
+    container_name: quantedge-loki
+    command: -config.file=/etc/loki/local-config.yaml
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    profiles: ["monitoring"]
+    container_name: quantedge-alloy
+    depends_on:
+      - loki
+    command: run /etc/alloy/config.alloy
+    volumes:
+      - ./ops/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["monitoring"]
+    container_name: quantedge-grafana
+    depends_on:
+      - prometheus
+      - loki
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   pgdata:
+  prometheus-data:

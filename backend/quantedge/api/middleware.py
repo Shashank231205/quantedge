@@ -1,24 +1,37 @@
-"""Request latency capture.
+"""Request telemetry: latency capture, Prometheus metrics and request IDs.
 
 The p95 shown on the System Health screen is computed from these records.
 Writing one database row per request would make the API slower than the thing
 it measures, so latencies accumulate in an in-memory ring and flush
 periodically.
+
+The same measurement feeds Prometheus, labelled by route template. One timer
+serves both, so the screen and the Grafana dashboard can never disagree about
+what a request cost.
 """
 
 from __future__ import annotations
 
+import re
 import time
 from collections import deque
 from datetime import UTC, datetime
+from functools import lru_cache
 
 import numpy as np
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.routing import compile_path
 
 from quantedge.db.models import ApiRequestLog
 from quantedge.db.session import session_scope
 from quantedge.logging_config import get_logger
+from quantedge.observability.context import (
+    REQUEST_ID_HEADER,
+    request_id_var,
+    resolve_request_id,
+)
+from quantedge.observability.metrics import HTTP_IN_FLIGHT, observe_request
 
 log = get_logger(__name__)
 
@@ -26,27 +39,69 @@ _LATENCIES: deque[dict] = deque(maxlen=5_000)
 _PENDING: list[dict] = []
 _FLUSH_EVERY = 50
 
+#: Probes and scrapes arrive every few seconds from every load balancer and
+#: Prometheus. Counted in metrics, but kept out of the latency log, where they
+#: would outnumber real traffic and drag the reported p95 toward zero.
+_UNLOGGED_PATHS = frozenset({"/metrics", "/health", "/health/live", "/health/ready"})
+
+
+@lru_cache(maxsize=4)
+def _route_patterns(app) -> tuple[tuple[re.Pattern, str], ...]:
+    """Compiled (regex, template) pairs for every route the app serves.
+
+    Built from the OpenAPI schema plus the app's own top-level routes, both
+    public interfaces, rather than from the router's internal structures.
+    Routers record their match on a copy of the ASGI scope that middleware
+    never sees, so the match has to be repeated here.
+    """
+    templates = set(app.openapi().get("paths", {}))
+    templates |= {r.path for r in app.routes if isinstance(getattr(r, "path", None), str)}
+    # Fewest parameters first, so /runs/latest wins over /runs/{run_id}.
+    ordered = sorted(templates, key=lambda t: (t.count("{"), -len(t)))
+    return tuple((compile_path(t)[0], t) for t in ordered)
+
+
+def _route_template(request: Request) -> str:
+    """The matched route's path template, or a fixed label for no match."""
+    path = request.url.path
+    for pattern, template in _route_patterns(request.app):
+        if pattern.match(path):
+            return template
+    return "unmatched"
+
 
 class LatencyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        request_id = resolve_request_id(request.headers.get(REQUEST_ID_HEADER))
+        token = request_id_var.set(request_id)
+        HTTP_IN_FLIGHT.inc()
         start = time.perf_counter()
-        response = await call_next(request)
-        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        try:
+            response = await call_next(request)
+        finally:
+            HTTP_IN_FLIGHT.dec()
+            request_id_var.reset(token)
+        elapsed = time.perf_counter() - start
+        elapsed_ms = elapsed * 1000.0
 
-        record = {
-            "endpoint": request.url.path,
-            "method": request.method,
-            "status_code": response.status_code,
-            "latency_ms": elapsed_ms,
-            "created_at": datetime.now(UTC).replace(tzinfo=None),
-        }
-        _LATENCIES.append(record)
-        _PENDING.append(record)
+        observe_request(_route_template(request), request.method, response.status_code, elapsed)
 
-        if len(_PENDING) >= _FLUSH_EVERY:
-            _flush()
+        if request.url.path not in _UNLOGGED_PATHS:
+            record = {
+                "endpoint": request.url.path,
+                "method": request.method,
+                "status_code": response.status_code,
+                "latency_ms": elapsed_ms,
+                "created_at": datetime.now(UTC).replace(tzinfo=None),
+            }
+            _LATENCIES.append(record)
+            _PENDING.append(record)
+
+            if len(_PENDING) >= _FLUSH_EVERY:
+                _flush()
 
         response.headers["X-Response-Time-Ms"] = f"{elapsed_ms:.2f}"
+        response.headers[REQUEST_ID_HEADER] = request_id
         return response
 
 

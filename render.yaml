@@ -1,15 +1,14 @@
-# Render blueprint: Postgres + FastAPI.
+# Render blueprint: the FastAPI service.
 #
-# The frontend is NOT here — it deploys to Vercel as a static SPA (see
-# vercel.json). Only the stateful half of the stack lives on Render.
+# The frontend is NOT here: it deploys to Vercel as a static SPA (see
+# vercel.json). The database is not here either. Render's free Postgres is
+# deleted 30 days after creation, which is how this deployment lost its data
+# once already, so the service points at an external free Postgres that does
+# not expire (Neon: 0.5GB, enough for the ~120MB this schema holds).
 #
 # Deploy with: render blueprint launch   (or connect the repo in the dashboard)
-
-databases:
-  - name: quantedge-db
-    databaseName: quantedge
-    user: quantedge
-    plan: free
+# Seed or refresh the data with the GitHub Actions workflows in
+# .github/workflows/data-*.yml; see README "Deployment".
 
 services:
   - type: web
@@ -18,18 +17,22 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /health/live
     # Migrations run on every deploy; they are idempotent. Seeding market data
-    # is a separate, explicit step (scripts/seed_cloud.sh) because a full
+    # is a separate, explicit step (the data-seed workflow) because a full
     # ingest takes ~15 minutes and must not run on every restart.
     dockerCommand: >
       sh -c "alembic upgrade head &&
              uvicorn quantedge.api.main:app --host 0.0.0.0 --port $PORT"
     envVars:
+      # The Neon connection string, pooled host (…-pooler.…) is fine here;
+      # the app disables server-side prepared statements for pooled URLs.
       - key: DATABASE_URL
-        fromDatabase:
-          name: quantedge-db
-          property: connectionString
+        sync: false
+      # Set to protect /metrics on the public URL; Prometheus sends it as a
+      # bearer token.
+      - key: METRICS_TOKEN
+        sync: false
       - key: API_KEY
         sync: false
       - key: CORS_ORIGINS

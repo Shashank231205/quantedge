@@ -1,0 +1,6 @@
+# Scripts and configs run inside Linux containers; CRLF breaks them.
+*.sh     text eol=lf
+*.cfg    text eol=lf
+*.alloy  text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf

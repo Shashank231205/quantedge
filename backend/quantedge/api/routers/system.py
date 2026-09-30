@@ -16,21 +16,30 @@ Concretely:
 
 from __future__ import annotations
 
+import logging
+from collections import deque
 from datetime import UTC, datetime
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy import func, select
 
-from quantedge.api.deps import TTLCache, require_api_key
+from quantedge.api.deps import TTLCache, require_api_key, require_api_key_or_bearer
 from quantedge.api.middleware import latency_stats
 from quantedge.config import settings
 from quantedge.db.models import ApiRequestLog, JobRun, OhlcvClean, Security
 from quantedge.db.session import session_scope
 from quantedge.ingestion.pipeline import coverage_stats
 from quantedge.ingestion.telemetry import compute_uptime, recent_runs
-from quantedge.logging_config import get_recent_logs
+from quantedge.logging_config import get_logger, get_recent_logs
 
 router = APIRouter(prefix="/system", tags=["system"])
+log = get_logger(__name__)
+
+#: Most recent alert notifications received from Alertmanager, newest last.
+#: Per-instance and in memory by design: the durable record is the log line
+#: each one produces, which Loki keeps across every replica.
+_ALERTS: deque[dict[str, Any]] = deque(maxlen=50)
 
 #: The jobs this platform actually runs.
 KNOWN_JOBS = ("ohlcv_ingest", "universe_refresh", "factor_compute", "backtest_nightly")
@@ -260,3 +269,46 @@ def system_info() -> dict:
             "target_annual_vol": settings.target_annual_vol,
         },
     }
+
+
+@router.post("/alerts", dependencies=[Depends(require_api_key_or_bearer)])
+def receive_alerts(payload: Annotated[dict[str, Any], Body()]) -> dict:
+    """Alertmanager webhook receiver.
+
+    Each alert becomes a log record — ERROR while critical and firing, WARNING
+    otherwise, INFO once resolved — so it surfaces in the System Health log
+    panel and in Loki without any external notification service.
+    """
+    received = 0
+    for alert in payload.get("alerts", []):
+        labels = alert.get("labels", {})
+        status = alert.get("status", "firing")
+        entry = {
+            "received_at": datetime.now(UTC).isoformat(),
+            "status": status,
+            "alertname": labels.get("alertname", "unknown"),
+            "severity": labels.get("severity", "none"),
+            "summary": alert.get("annotations", {}).get("summary", ""),
+            "starts_at": alert.get("startsAt"),
+        }
+        _ALERTS.append(entry)
+        received += 1
+
+        if status == "resolved":
+            level = logging.INFO
+        elif entry["severity"] == "critical":
+            level = logging.ERROR
+        else:
+            level = logging.WARNING
+        log.log(
+            level, "alert.%s name=%s severity=%s summary=%s",
+            status, entry["alertname"], entry["severity"], entry["summary"],
+        )
+    return {"received": received}
+
+
+@router.get("/alerts", dependencies=[Depends(require_api_key)])
+def recent_alerts(limit: int = Query(default=20, le=50)) -> dict:
+    """Alert notifications this instance has received, newest first."""
+    items = list(reversed(_ALERTS))[:limit]
+    return {"n": len(items), "alerts": items}

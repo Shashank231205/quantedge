@@ -1,0 +1,50 @@
+# One-off full load of a fresh database: schema, universe, six years of daily
+# bars, factors, snapshot and the walk-forward backtest.
+#
+# Runs on GitHub's free runners against the DATABASE_URL repository secret, so
+# restoring a lost or new database needs no shell on the host and no local
+# setup. Every step is idempotent; re-run the workflow if one fails.
+#
+# Trigger: Actions tab -> "Data: seed database" -> Run workflow,
+#          or  gh workflow run data-seed.yml
+
+name: "Data: seed database"
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: database-writes
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Check the secret is set
+        run: test -n "$DATABASE_URL" || { echo "Add the DATABASE_URL repository secret first."; exit 1; }
+      - run: pip install -e .
+      - run: alembic upgrade head
+      - name: Point-in-time universe
+        run: python -m quantedge.cli universe
+      - name: OHLCV backfill
+        run: python -m quantedge.cli ingest
+      - name: Factor diagnostics
+        run: python -m quantedge.cli factors
+      - name: Factor snapshot
+        run: python -m quantedge.cli snapshot
+      - name: Walk-forward backtest
+        run: python -m quantedge.cli backtest
+      - name: Coverage
+        run: python -m quantedge.cli status

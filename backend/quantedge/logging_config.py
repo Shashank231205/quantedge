@@ -8,12 +8,14 @@ application — there is no synthetic log generator anywhere in the project.
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 from collections import deque
 from datetime import UTC, datetime
 from typing import Any
 
 from quantedge.config import settings
+from quantedge.observability.context import RequestIdFilter
 
 _LOG_BUFFER: deque[dict[str, Any]] = deque(maxlen=settings.log_buffer_size)
 
@@ -56,6 +58,28 @@ def get_recent_logs(
     return list(reversed(records))[:limit]
 
 
+class JsonFormatter(logging.Formatter):
+    """One JSON object per line, for log shippers.
+
+    Loki indexes labels, not message text, so the fields a query filters on —
+    level, logger, instance, request ID — are top-level keys rather than
+    substrings of the message.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "instance": settings.instance_name,
+            "request_id": getattr(record, "request_id", "-"),
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str)
+
+
 def configure_logging(level: int = logging.INFO) -> None:
     root = logging.getLogger()
     if any(isinstance(h, RingBufferHandler) for h in root.handlers):
@@ -64,12 +88,16 @@ def configure_logging(level: int = logging.INFO) -> None:
     root.setLevel(level)
 
     console = logging.StreamHandler()
-    console.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
-            datefmt="%H:%M:%S",
+    console.addFilter(RequestIdFilter())
+    if settings.log_format == "json":
+        console.setFormatter(JsonFormatter())
+    else:
+        console.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)-7s [%(name)s] [%(request_id)s] %(message)s",
+                datefmt="%H:%M:%S",
+            )
         )
-    )
     root.addHandler(console)
     root.addHandler(RingBufferHandler())
 

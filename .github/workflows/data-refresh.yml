@@ -1,0 +1,56 @@
+# Nightly pipeline: the same jobs the scheduler runs, on GitHub's free runners.
+#
+# The free web instance sleeps when idle, so an in-process scheduler there
+# would miss its window. This workflow runs after the US close on weekdays and
+# writes to the same database; each step records itself in job_runs, so the
+# pipeline uptime on the System Health screen reflects these runs.
+
+name: "Data: nightly refresh"
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"   # 22:30 UTC, after the US close
+  workflow_dispatch:
+
+concurrency:
+  group: database-writes
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Skip when no database is configured
+        id: guard
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret not set; nothing to refresh."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.skip != 'true'
+        run: pip install -e .
+      - if: steps.guard.outputs.skip != 'true'
+        run: alembic upgrade head
+      - name: Incremental OHLCV
+        if: steps.guard.outputs.skip != 'true'
+        run: python -m quantedge.cli ingest --incremental
+      - name: Factor diagnostics
+        if: steps.guard.outputs.skip != 'true'
+        run: python -m quantedge.cli factors
+      - name: Factor snapshot
+        if: steps.guard.outputs.skip != 'true'
+        run: python -m quantedge.cli snapshot
+      - name: Walk-forward backtest
+        if: steps.guard.outputs.skip != 'true'
+        run: python -m quantedge.cli backtest

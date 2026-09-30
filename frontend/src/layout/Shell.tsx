@@ -14,6 +14,7 @@ const NAV = [
   { to: '/factors', label: 'Factors', icon: '◈' },
   { to: '/backtest', label: 'Backtest', icon: '◱' },
   { to: '/risk', label: 'Risk', icon: '◉' },
+  { to: '/microstructure', label: 'Microstructure', icon: '≋' },
   { to: '/pipeline', label: 'Pipeline', icon: '⛁' },
   { to: '/analyst', label: 'Analyst', icon: '☝' },
   { to: '/inu', label: 'INU AI', icon: '◆' },

@@ -37,6 +37,9 @@ dependencies = [
     # Scheduling
     "apscheduler>=3.10",
 
+    # Operations: Prometheus exposition for the API and the scheduler.
+    "prometheus-client>=0.20",
+
     # Utility
     "tenacity>=8.5",
     "structlog>=24.4",

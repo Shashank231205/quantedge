@@ -14,7 +14,7 @@ identical bars.
 from __future__ import annotations
 
 import signal
-import time
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -133,27 +133,53 @@ def build_scheduler(ingest_hour: int = 22) -> BackgroundScheduler:
     return scheduler
 
 
-def run_scheduler(ingest_hour: int = 22) -> None:
-    """Start the scheduler and block until interrupted."""
+def run_scheduler(ingest_hour: int = 22, ha: bool = False) -> None:
+    """Start the scheduler and block until interrupted.
+
+    With ``ha`` the scheduler starts paused and only runs jobs while it holds
+    the leader lock, so any number of copies can run on different machines and
+    exactly one of them fires each job. Without it, jobs run unconditionally —
+    the right behaviour for a single development instance.
+
+    Either way the process serves Prometheus metrics, so a standby that is up
+    but not leading is distinguishable from one that is down.
+    """
+    from prometheus_client import start_http_server
+
+    from quantedge.config import settings
+    from quantedge.observability.metrics import REGISTRY
+
+    start_http_server(settings.scheduler_metrics_port, registry=REGISTRY)
     scheduler = build_scheduler(ingest_hour)
-    scheduler.start()
+    scheduler.start(paused=ha)
 
     for job in scheduler.get_jobs():
         log.info("scheduler.job id=%s next_run=%s", job.id, job.next_run_time)
 
-    stopping = False
+    stop = threading.Event()
 
     def shutdown(signum, frame):
-        nonlocal stopping
-        stopping = True
+        stop.set()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    log.info("scheduler.started jobs=%s", len(scheduler.get_jobs()))
+    log.info("scheduler.started jobs=%s ha=%s", len(scheduler.get_jobs()), ha)
     try:
-        while not stopping:
-            time.sleep(1)
+        if ha:
+            from quantedge.ingestion.leader import LeaderElector, PostgresAdvisoryLock
+
+            elector = LeaderElector(
+                PostgresAdvisoryLock(settings.database_url, settings.leader_lock_key),
+                on_elected=scheduler.resume,
+                on_demoted=scheduler.pause,
+                retry_seconds=settings.leader_retry_seconds,
+                name=settings.instance_name,
+            )
+            elector.run(stop)
+        else:
+            while not stop.is_set():
+                stop.wait(1)
     finally:
         scheduler.shutdown(wait=False)
         log.info("scheduler.stopped")

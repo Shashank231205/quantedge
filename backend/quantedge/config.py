@@ -6,6 +6,7 @@ reproduced from its recorded config alone.
 
 from __future__ import annotations
 
+import socket
 from functools import lru_cache
 
 from pydantic import Field, field_validator
@@ -83,6 +84,25 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     cors_origin_regex: str | None = None
     log_buffer_size: int = 500
+
+    # --- Operations ----------------------------------------------------------
+    #: "json" when a log shipper reads stdout (the monitoring stack sets it);
+    #: plain text is easier to read in a terminal.
+    log_format: str = Field(default="text", pattern="^(text|json)$")
+    #: Identifies this process in logs and metrics once there are replicas.
+    #: Defaults to the hostname, which under Docker is the container ID.
+    instance_name: str = Field(default_factory=socket.gethostname)
+    #: When set, /metrics requires `Authorization: Bearer <token>`. Leave unset
+    #: only where the port is not publicly reachable.
+    metrics_token: str | None = None
+    #: The scheduler serves its own /metrics on this port.
+    scheduler_metrics_port: int = 9101
+    #: Leader election. Only the instance holding the Postgres advisory lock
+    #: runs jobs; the others wait and take over if its connection drops.
+    #: Any bigint works; it only has to be the same for every scheduler and
+    #: unused by anything else taking advisory locks on this database.
+    leader_lock_key: int = 424_201
+    leader_retry_seconds: float = 5.0
 
     # --- Analyst mode -------------------------------------------------------
     # The analyst writes the prose of a report; it never decides a score. Every

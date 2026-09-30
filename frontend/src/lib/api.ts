@@ -143,6 +143,13 @@ export const api = {
   systemLogs: (limit = 60, level = 'ALL') =>
     request<LogsResponse>(`/v1/system/logs?limit=${limit}&level=${level}`),
   systemInfo: () => request<SystemInfo>('/v1/system/info'),
+
+  // --- Microstructure ----------------------------------------------------
+  microSummary: () => request<MicroSummary>('/v1/microstructure/summary'),
+  microStudy: (symbol: string) =>
+    request<MicroStudy>(`/v1/microstructure/study/${encodeURIComponent(symbol)}`),
+  microStability: (symbol: string) =>
+    request<MicroStability>(`/v1/microstructure/stability/${encodeURIComponent(symbol)}`),
 }
 
 // ---------------------------------------------------------------------------
@@ -622,4 +629,136 @@ export interface SystemInfo {
   trading_days_per_year: number
   costs: { commission_bps: number; slippage_bps: number }
   risk_limits: Record<string, number>
+}
+
+// --- Microstructure --------------------------------------------------------
+
+export interface MicroDataset {
+  symbol: string
+  venue: string
+  start: string
+  end: string
+  days: number
+  seconds: number
+  book_events: number
+  trades: number
+  tick_size: number
+  median_mid: number
+  pct_seconds_one_tick_spread: number
+  half_spread_bps_median: number
+  pct_seconds_mid_unchanged: number
+}
+
+export interface MicroCrossAsset {
+  symbol: string
+  book_events: number
+  pct_one_tick_spread: number
+  qi_ic_10s: number
+  qi_days_positive: string
+  ofi_r2_contemporaneous_10s: number
+  ofi_r2_predictive_10s: number
+  oos_ic_10s: number | null
+  oos_folds_positive: string
+  limit_saving_vs_market_bps: number
+  limit_fill_rate: number
+  fill_markout_bps: number | null
+}
+
+export interface MicroSummary {
+  symbols: string[]
+  cross_asset: MicroCrossAsset[]
+  datasets: Record<string, MicroDataset>
+}
+
+export interface MicroIcRow {
+  feature: string
+  horizon_s: number
+  ic: number
+  t_stat: number
+  n: number
+  hit_rate: number | null
+  days_positive: number
+  days: number
+}
+
+export interface MicroPolicyStats {
+  mean_cost_bps: number
+  median_cost_bps: number
+  std_cost_bps: number | null
+  n: number
+}
+
+export interface MicroPaired {
+  mean_diff_bps: number
+  t_stat: number | null
+  p_value: number | null
+}
+
+export interface MicroExecution {
+  wait_s: number
+  fill_model: string
+  n_decisions: number
+  policies: Record<'market' | 'limit' | 'signal', MicroPolicyStats>
+  limit_detail: {
+    fill_rate: number
+    mean_wait_to_fill_s: number | null
+    filled_mean_cost_bps: number | null
+    unfilled_mean_cost_bps: number | null
+    fill_markout_bps: number | null
+  }
+  signal_detail: {
+    routed_market_pct: number
+    vs_best_static: MicroPaired & { policy: string }
+  }
+}
+
+export interface MicroFeeTier {
+  tier: string
+  maker_bps: number
+  taker_bps: number
+  market_mean_bps: number
+  limit_mean_bps: number
+  signal_mean_bps: number
+  routed_market_pct: number
+  signal_vs_best_static: MicroPaired & { policy: string }
+}
+
+export interface MicroRegimeRow {
+  regime: string
+  n: number
+  ic_qi: number
+  ic_ofi_5: number
+  ic_tfi_5: number
+}
+
+export interface MicroStudy {
+  dataset: MicroDataset
+  features: string[]
+  ic_by_horizon: MicroIcRow[]
+  contemporaneous_vs_predictive: {
+    interval_s: number
+    r2_contemporaneous: number
+    r2_predictive: number
+    n_intervals: number
+  }[]
+  ic_by_regime: Record<'vol_regime' | 'spread_regime' | 'session', MicroRegimeRow[]>
+  walk_forward_model: {
+    horizon_s: number
+    pooled_oos_ic: number
+    pooled_oos_r2: number
+    folds_positive_ic: number
+    folds: { test_day: string; oos_ic: number; oos_r2: number | null }[]
+  }
+  execution: Record<string, Record<'conservative' | 'optimistic', MicroExecution>>
+  fee_sensitivity: MicroFeeTier[]
+}
+
+export interface MicroStability {
+  feature: string
+  horizon_s: number
+  hours: number
+  mean_ic: number
+  pct_hours_positive: number
+  worst_hour_ic: number
+  hourly: { hour: string; ic: number; n: number }[]
 }

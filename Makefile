@@ -24,12 +24,16 @@ help:
 	@echo "    make benchmark   naive vs vectorized, with parity verification"
 	@echo "    make signals     current strategy ranking"
 	@echo "    make status      data coverage and pipeline uptime"
+	@echo "    make micro       order-book microstructure study (ETH, BTC, SOL)"
 	@echo ""
 	@echo "  Services"
 	@echo "    make serve       API on :8000  (docs at /docs)"
 	@echo "    make ui          dashboard on :5173"
 	@echo "    make schedule    run the job scheduler"
 	@echo "    make up          full stack via Docker"
+	@echo "    make ha-up       2 API replicas + HAProxy, 2 leader-elected schedulers"
+	@echo "    make monitoring-up  HA stack plus Prometheus, Grafana, Loki"
+	@echo "    make failover    kill replicas and the scheduler leader under load"
 	@echo ""
 	@echo "  Quality"
 	@echo "    make test        full test suite"
@@ -82,6 +86,9 @@ benchmark:
 signals:
 	$(CLI) signals
 
+micro:
+	$(CLI) micro study
+
 status:
 	$(CLI) status
 
@@ -111,7 +118,16 @@ up:
 	docker compose up --build
 
 down:
-	docker compose down
+	docker compose --profile ha --profile monitoring down
+
+ha-up:
+	docker compose --profile ha up --build -d
+
+monitoring-up:
+	docker compose --profile ha --profile monitoring up --build -d
+
+failover:
+	bash ops/failover_test.sh
 
 # --- quality ----------------------------------------------------------------------
 
