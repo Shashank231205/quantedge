@@ -88,6 +88,66 @@ Measured on Python 3.11.15, NumPy 2.4.6, pandas 3.0.5, macOS arm64, best of 3.
 
 ---
 
+## Order-book microstructure
+
+A second study at the opposite end of the time scale: **323 million top-of-book
+updates and 23 million trades** from Binance USDⓈ-M futures (ETH, BTC, SOL;
+2023-10-02 to 2023-10-15, 14 days each), aggregated to one-second bars. The
+question is whether liquidity at the touch and the direction of order flow
+predict the next few seconds, and whether that is worth anything once it has to
+pay for its own execution.
+
+| | ETHUSDT | BTCUSDT | SOLUSDT |
+|---|---:|---:|---:|
+| Quote updates | 88.1M | 190.6M | 44.2M |
+| Queue-imbalance IC, 10s ahead | **0.268** | **0.311** | **0.141** |
+| Days with positive IC | 14/14 | 14/14 | 14/14 |
+| Walk-forward OOS IC (train day d-1, test day d) | **0.268** | **0.317** | **0.142** |
+| Test days with positive OOS IC | 13/13 | 13/13 | 13/13 |
+| OFI R², same 10s interval | 45.3% | 53.9% | 58.1% |
+| OFI R², *next* 10s interval | 0.20% | 0.35% | 0.06% |
+| Limit (10s wait) vs market order, saving | 0.93 bps | 0.84 bps | 1.29 bps |
+| Markout after a limit fill | -1.04 bps | -1.06 bps | -1.23 bps |
+
+Execution figures use the conservative fill model and include fees.
+
+What the numbers say:
+
+- **Queue imbalance predicts; order-flow imbalance mostly explains.** OFI
+  accounts for roughly half of the *same* interval's price change, replicating
+  Cont, Kukanov & Stoikov (2014), and for almost none of the *next* one. The
+  study reports both R² figures side by side so the first is never quoted as
+  the second.
+- **The edge is short-lived and regime-dependent.** Queue-imbalance IC falls
+  from 0.38 at 1s to 0.13 at 60s (ETH), and from 0.40 in the calmest
+  volatility tercile to 0.18 in the most volatile. It was positive in every
+  one of 336 hours, with no significant change between the first and second
+  week (p = 0.11).
+- **At retail fees the forecast cannot pay for itself.** Resting a limit
+  order beats crossing the spread under both fill bounds, mostly by saving the
+  3bps maker/taker fee gap, and fills that need the level to trade through are
+  followed by a ~1bp move against them: adverse selection. Routing between
+  market and limit on the model's forecast does not help at the regular fee
+  tier; it is marginally worse (by under 0.01bps). At the top fee tier
+  (0 / 1.7bps) the same routing beats the best static policy by 0.05bps on ETH
+  (t = -10.3) and 0.07bps on BTC (t = -15.0), though not on SOL at the
+  mid tier. The forecast is real; whether it is worth trading depends on what
+  being wrong costs.
+
+Method notes: labels are sampled at non-overlapping intervals so t-statistics
+are not inflated by shared seconds; the walk-forward model drops the last *h*
+seconds of each training day because their labels reach into the test day;
+limit fills are bracketed between a conservative bound (the whole price level
+must trade through) and an optimistic one (front of queue); and the signal
+policy is compared against whichever static policy turned out cheaper on the
+test days, a bar set with hindsight it never had.
+
+```bash
+quantedge micro study        # downloads, verifies SHA-256, builds bars, runs everything
+```
+
+---
+
 ## Data
 
 | | |
@@ -137,12 +197,24 @@ invoked `Series.__repr__` inside the rebalance loop.
 windows strictly precede test windows with an embargo gap, and that test
 windows never overlap.
 
+**Microstructure mechanics** — `tests/test_microstructure.py` checks OFI
+against hand-computed increments, asserts that bars built from a stream split
+into arbitrary chunks equal the one-pass result, rewrites every second after a
+cutoff to prove no feature reads the future, pins each fill-simulator rule to a
+constructed case, and runs the full pipeline on a synthetic market with a
+known signal (recovered) and on one with none (not found).
+
+**Failover** — `tests/test_leader.py` kills the leader's database backend with
+`pg_terminate_backend` and asserts the standby acquires the lock;
+`ops/failover_test.sh` runs in CI and kills API replicas and the scheduler
+leader under load.
+
 **Metric correctness** — `tests/test_metrics.py` checks closed-form cases.
 It caught a drawdown bug where the running peak was seeded at the first
 post-return value, so a series opening with a loss reported zero drawdown.
 
 ```
-163 tests passing
+218 tests passing
 ```
 
 ---
@@ -162,9 +234,14 @@ quantedge/
 │   │                  exposure caps, VaR/CVaR
 │   ├── metrics/       performance, drawdown, trades, attribution,
 │   │                  deflated Sharpe
-│   ├── api/           FastAPI, 25 endpoints, auth, latency middleware, WS
+│   ├── microstructure/ Binance L1 + trade archives, event-level OFI, 1s bars,
+│   │                  short-horizon IC, walk-forward model, execution simulator
+│   ├── observability/ Prometheus metrics, request-ID correlation
+│   ├── api/           FastAPI, auth, latency middleware, WS, health probes
 │   └── strategy.py    the canonical strategy definition
-└── frontend/src/      React + Vite + Tailwind + Recharts, 5 screens
+├── frontend/src/      React + Vite + Tailwind + Recharts, 8 screens
+└── ops/               HAProxy, Prometheus + alert rules, Alertmanager, Grafana,
+                       Loki/Alloy, and the failover drill
 ```
 
 ### The strategy
@@ -206,7 +283,7 @@ make backtest    # walk-forward validation, prints the honest metrics
 make benchmark   # naive vs vectorized, with parity verification
 
 make dev         # API on :8000 and dashboard on :5173, together
-make test        # 163 tests
+make test        # 218 tests
 ```
 
 `make dev` runs both servers in one terminal with prefixed output; Ctrl-C stops
@@ -215,7 +292,10 @@ both. To run them separately, `make serve` and `make ui` in two shells.
 Or the whole stack:
 
 ```bash
-docker compose up --build
+docker compose up --build                                   # single API + UI
+docker compose --profile ha up --build                      # 2 API replicas + LB, 2 schedulers
+docker compose --profile ha --profile monitoring up --build # + Prometheus, Grafana, Loki
+bash ops/failover_test.sh                                   # the failover drill
 ```
 
 ### CLI
@@ -231,13 +311,15 @@ quantedge benchmark         # engine comparison
 quantedge signals           # current ranking
 quantedge status            # coverage + pipeline uptime
 quantedge schedule          # run the scheduler
+quantedge schedule --ha     # run jobs only while holding the leader lock
+quantedge micro study       # order-book microstructure study (no database needed)
 ```
 
 ---
 
 ## The dashboard
 
-Five screens, all reading live API data.
+Eight screens, all reading live API data.
 
 1. **Portfolio Dashboard** — KPI tiles, cumulative returns vs SPY, live
    signals, drawdown, system log
@@ -249,6 +331,11 @@ Five screens, all reading live API data.
 4. **Risk Monitor** — drawdown circuit gauge, sector concentration with cap
    markers, VaR/CVaR, position sizing matrix
 5. **System Health** — ingestion telemetry, job streams, API latency, syslog
+6. **Microstructure** — IC by horizon, explanation vs prediction, hourly
+   stability, regime splits, market-vs-limit execution with fee sensitivity,
+   cross-asset summary
+7. **Analyst** — rule-scored assessment with model-written prose
+8. **INU AI** — chat over the platform's own data
 
 ### On telemetry honesty
 
@@ -269,6 +356,46 @@ screen originally recomputed a full backtest per request and put p95 at
 
 ---
 
+## Operations: redundancy and monitoring
+
+The `ha` compose profile runs the service the way a system with a live
+dependency on it should run: no single process whose loss stops it.
+
+| Concern | Mechanism |
+|---|---|
+| An API instance dies | Two replicas behind HAProxy. Readiness checks every 2s take a replica out after two failures; a request that reached a dying replica and got no answer is retried on the other. |
+| Instance up, database unreachable | `/health/ready` returns 503, so the balancer drains it. `/health/live` never touches dependencies, so a database blip does not get every replica restarted at once. |
+| The scheduler dies | Two schedulers compete for a Postgres advisory lock and only the holder runs jobs. The lock dies with the holder's connection, so a crashed leader cannot keep it, and the standby takes over on its next poll. Jobs write through idempotent upserts, which is why no fencing token is needed. |
+| Deploys | Migrations run once, in their own container, before any replica starts; replicas drain in-flight requests on SIGTERM. |
+
+**The drill.** `ops/failover_test.sh` runs in CI on every push. It drives
+traffic through the balancer, stops one API replica gracefully, hard-kills the
+other, then hard-kills the scheduler leader, and fails the build if a single
+request is dropped or the standby takes more than 30 seconds to take over.
+
+**Monitoring.** Every replica exposes Prometheus metrics: request rate,
+latency and errors by route template (never the raw path, so label
+cardinality is bounded), in-flight requests, job outcomes and durations,
+scheduler leadership, and pipeline freshness read from the database so that
+every replica reports the same truth. `ops/prometheus/alerts.yml` defines 11
+alerts: no healthy backends, lost redundancy, database unreachable, error rate
+above 2%, p95 above the 200ms target, no scheduler leader, split brain, missing
+standby, failed jobs and stale data. Alertmanager delivers them to the API's
+own webhook, which logs them, so they reach the System Health screen with no
+third-party account.
+
+**Logging.** With `LOG_FORMAT=json` every line is a JSON object carrying the
+instance and the request ID, which HAProxy assigns at the edge and each
+response echoes back as `X-Request-ID`. Alloy ships container logs to Loki,
+so one request can be followed across the balancer and whichever replica
+served it: `{service="api"} | json | request_id="..."`.
+
+Grafana (`:3000`) opens on a provisioned dashboard covering all of the above.
+CI validates every ops config with the tool that loads it (`promtool`,
+`amtool`, `haproxy -c`, `alloy fmt`, `docker compose config`).
+
+---
+
 ## Deploying it
 
 The two halves deploy to different places, because they are different kinds of
@@ -278,17 +405,33 @@ it needs a real long-lived process, not a serverless function.
 
 | Component | Host | Config |
 |---|---|---|
-| Dashboard | Vercel | `frontend/vercel.json` |
-| API + PostgreSQL | Render | `render.yaml` |
+| Dashboard | Vercel (free) | `frontend/vercel.json` |
+| API | Render (free) | `render.yaml` |
+| PostgreSQL | Neon (free, 0.5GB, does not expire) | `DATABASE_URL` |
+| Nightly pipeline | GitHub Actions (free) | `.github/workflows/data-*.yml` |
 
-**1. Backend.** Point Render at this repo; the blueprint provisions PostgreSQL
-and the API together. Migrations run automatically on each deploy.
+Every piece runs on a free tier. The database is deliberately not Render's:
+Render deletes free Postgres instances 30 days after creation, which is how an
+earlier deployment of this project lost its data. The schema holds about
+120MB, well inside Neon's free allowance.
+
+**0. Database.** Create a free project at neon.tech and copy its connection
+string. Either host form works; the app turns off server-side prepared
+statements for pooled (`-pooler`) URLs. Add it as a repository secret:
+
+```bash
+gh secret set DATABASE_URL        # paste the Neon connection string
+```
+
+**1. Backend.** Point Render at this repo; the blueprint creates the API
+service. Migrations run automatically on each deploy.
 
 Render prompts for every secret rather than reading it from `render.yaml`, so
-nothing sensitive is committed. Two are required:
+nothing sensitive is committed. Three are required:
 
 | Variable | Value |
 |---|---|
+| `DATABASE_URL` | The same Neon connection string. |
 | `API_KEY` | Any random string. The frontend sends it as `X-API-Key`. |
 | `CORS_ORIGINS` | Your Vercel URL, once you have it from step 3. |
 
@@ -306,25 +449,18 @@ scores come from the rubric, and only the prose falls back to templates. INU AI
 degrades less gracefully because a chat with no model has nothing to say, so it
 states that plainly instead of erroring.
 
-**2. Seed the database.** A fresh deployment has schema but no market data, and
-every screen will honestly render its empty state until this runs.
-
-Render's free tier has no shell, so there are two paths depending on your plan:
+**2. Seed the database.** A fresh database has no market data, and every
+screen will honestly render its empty state until this runs:
 
 ```bash
-# Paid plan — from a Render shell on the API service:
-bash scripts/seed_cloud.sh
-
-# Free plan — from your own machine, over the database's public endpoint.
-# Put the provider's External Database URL in backend/.env.render first:
-#   RENDER_DATABASE_URL=postgresql://user:pass@host.oregon-postgres.render.com/db
-bash scripts/seed_remote.sh
+gh workflow run data-seed.yml     # or: Actions tab -> "Data: seed database"
 ```
 
-Both run the same pipeline — universe, ingest, factors, backtest — because it
-only needs a `DATABASE_URL` and does not care where the database lives. Expect
-15-25 minutes in-container, a little longer remotely since every write crosses
-the network. Both are idempotent, so a failed step can simply be re-run.
+It runs the full pipeline (universe, ingest, factors, snapshot, backtest) on
+a GitHub runner against the `DATABASE_URL` secret in 15-25 minutes, and is
+idempotent, so a failed step can simply be re-run. From then on
+`data-refresh.yml` tops the data up every weekday after the US close. The free
+Render instance sleeps when idle, so the pipeline cannot live inside it.
 
 **3. Frontend.** Import the repo into Vercel and set **Root Directory** to
 `frontend`. That matters: Vercel scans the whole repo and will otherwise offer
@@ -357,8 +493,14 @@ Stated because a reviewer will find them anyway.
 - **No live execution.** Fills are modelled with a linear cost model
   (6bps/side) and assume the close is achievable. Real market impact at size
   would be worse.
-- **Daily bars only.** No intraday data, no order book, no borrow costs for
-  shorts.
+- **Daily bars for the equity strategy.** No intraday equity data and no
+  borrow costs for shorts. Order-book work is confined to the microstructure
+  study, on crypto futures.
+- **The microstructure study is two weeks of L1 data.** Top of book only, so
+  queue position is unobservable and limit fills are bracketed rather than
+  simulated exactly; a single small order, so no market impact; and Binance
+  stopped publishing the bookTicker archive after March 2024, so the window
+  cannot be extended to recent data from the same source.
 - **Two folds carry much of the result** (+3.69 and +3.93). Excluding them
   leaves an ordinary strategy.
 
@@ -375,6 +517,9 @@ For anyone cross-checking claims against this repo:
 | Backtest runtime reduction | **98.0%** (49.2x), parity-verified | `make benchmark` |
 | Sharpe ratio | **1.42 out-of-sample** (0.90 in-sample) | `make backtest` |
 | Max drawdown | **-18.9%** | `make backtest` |
+| Order-book events processed | **323M** quote updates, 23M trades | `quantedge micro study` |
+| Short-horizon OOS IC | **0.14-0.32** at 10s, 13/13 test days positive per asset | `quantedge micro study` |
+| Failover | **0** dropped requests on replica loss; scheduler takeover within 30s | `ops/failover_test.sh` (CI) |
 
 The Sharpe figure is the walk-forward out-of-sample number and should always
 be quoted with its trial count (16) and deflated Sharpe (0.236) alongside.
